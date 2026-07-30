@@ -4,7 +4,22 @@
 
 Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot/Clawdbot) as an **emergency-response AI assistant** in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) container — with an incident kanban board, multi-channel intake (web, Telegram), and Zero Trust security.
 
-![moltworker architecture](./assets/logo.png)
+<p align="center">
+  <img src="./assets/logo.png" alt="OpenClaw Emergencies logo" width="256" />
+</p>
+
+## The Mission
+
+When an emergency hits — a flood, a fire, a blackout — people reach out through whatever channel they have at hand, and responders drown in scattered chats. **We want to turn every message into a tracked incident.**
+
+This project is building exactly that:
+
+1. **People report emergencies** through a web chat or Telegram (WhatsApp next) — no app to install, no account to create.
+2. **An AI agent listens 24/7**, acknowledges the reporter, asks the right follow-up questions, and files every emergency as a card on a shared kanban board with severity, source and reporter context.
+3. **Human operators coordinate** on that board in real time: triage, prioritize, assign states by dragging cards, and watch the agent's work appear live.
+4. **Everything runs on Cloudflare's edge** — Workers, Sandbox Containers, D1, R2, Zero Trust — so a small team can deploy a resilient, secure coordination point in minutes, for a few dollars a month.
+
+The goal: **nobody's emergency gets lost in a chat thread again.**
 
 > **Experimental:** This is a proof of concept demonstrating that OpenClaw can run in Cloudflare Sandbox. It is not officially supported and may break without notice. Use at your own risk.
 
@@ -12,7 +27,7 @@ Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot/Clawdbot)
 
 > **After a Deploy-button deploy:** complete steps 2–5 of the [Setup Guide](#setup-guide) (D1 database, secrets, Zero Trust) and redeploy.
 
-## What You Get
+## What You Get Today
 
 - **AI emergency agent** — OpenClaw gateway with webchat Control UI, reachable from any browser
 - **Emergency kanban board** — incidents tracked in Cloudflare D1 (`New → Triaged → In Progress → Resolved`), editable by humans **and** by the agent itself

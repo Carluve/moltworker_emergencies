@@ -4,7 +4,22 @@
 
 Ejecuta [OpenClaw](https://github.com/openclaw/openclaw) (antes Moltbot/Clawdbot) como **asistente de IA para emergencias** en un contenedor de [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) — con tablero kanban de incidentes, entrada multicanal (web, Telegram) y seguridad Zero Trust.
 
-![arquitectura moltworker](./assets/logo.png)
+<p align="center">
+  <img src="./assets/logo.png" alt="Logo de OpenClaw Emergencies" width="256" />
+</p>
+
+## La misión
+
+Cuando estalla una emergencia — una inundación, un incendio, un apagón — la gente pide ayuda por el canal que tiene a mano, y los equipos de respuesta se ahogan en chats dispersos. **Queremos convertir cada mensaje en un incidente registrado y gestionado.**
+
+Este proyecto construye exactamente eso:
+
+1. **La gente reporta emergencias** desde un chat web o Telegram (WhatsApp después) — sin instalar apps, sin crear cuentas.
+2. **Un agente de IA escucha 24/7**, confirma la recepción al reportante, hace las preguntas adecuadas y registra cada emergencia como una tarjeta en un tablero kanban compartido, con severidad, canal de origen y contexto del reportante.
+3. **Los operadores humanos coordinan** sobre ese tablero en tiempo real: clasifican, priorizan, cambian estados arrastrando tarjetas y ven el trabajo del agente aparecer en vivo.
+4. **Todo corre en el edge de Cloudflare** — Workers, Sandbox Containers, D1, R2, Zero Trust — para que un equipo pequeño despliegue un punto de coordinación resiliente y seguro en minutos, por unos pocos dólares al mes.
+
+El objetivo: **que ninguna emergencia se vuelva a perder en un hilo de chat.**
 
 > **Experimental:** Esto es una prueba de concepto que demuestra que OpenClaw puede ejecutarse en Cloudflare Sandbox. No tiene soporte oficial y puede romperse sin previo aviso. Úsalo bajo tu responsabilidad.
 
@@ -12,7 +27,7 @@ Ejecuta [OpenClaw](https://github.com/openclaw/openclaw) (antes Moltbot/Clawdbot
 
 > **Tras desplegar con el botón:** completa los pasos 2–5 de la [Guía de instalación](#guía-de-instalación) (base de datos D1, secrets, Zero Trust) y vuelve a desplegar.
 
-## Qué obtienes
+## Qué obtienes hoy
 
 - **Agente de IA para emergencias** — gateway OpenClaw con webchat (Control UI), accesible desde cualquier navegador
 - **Tablero kanban de emergencias** — incidentes en Cloudflare D1 (`Nuevas → Clasificadas → En curso → Resueltas`), editable por humanos **y** por el propio agente
