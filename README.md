@@ -1,6 +1,6 @@
-# OpenClaw on Cloudflare Workers
+# OpenClaw Emergencies on Cloudflare Workers
 
-Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly Clawdbot) personal AI assistant in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/).
+Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot/Clawdbot) as an **emergency-response AI assistant** in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) container — with an incident kanban board, multi-channel intake (web, Telegram), and Zero Trust security.
 
 ![moltworker architecture](./assets/logo.png)
 
@@ -8,335 +8,263 @@ Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Carluve/moltworker_emergencies)
 
-> **After a Deploy-button deploy:** create the kanban D1 database and fill in `database_id` in `wrangler.jsonc` (see [Emergency Board](#emergency-board-kanban)), then redeploy.
+> **After a Deploy-button deploy:** complete steps 2–5 of the [Setup Guide](#setup-guide) (D1 database, secrets, Zero Trust) and redeploy.
 
-## Requirements
+## What You Get
 
-- [Workers Paid plan](https://www.cloudflare.com/plans/developer-platform/) ($5 USD/month) — required for Cloudflare Sandbox containers. Running the container incurs additional compute costs; see [Container Cost Estimate](#container-cost-estimate) below for details.
-- [Anthropic API key](https://console.anthropic.com/) — for Claude access, or you can use AI Gateway's [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/)
-
-The following Cloudflare features used by this project have free tiers:
-- Cloudflare Access (authentication)
-- Browser Rendering (for browser navigation)
-- AI Gateway (optional, for API routing/analytics)
-- R2 Storage (optional, for persistence)
-
-## Container Cost Estimate
-
-This project uses a `standard-1` Cloudflare Container instance (1/2 vCPU, 4 GiB memory, 8 GB disk). Below are approximate monthly costs assuming the container runs 24/7, based on [Cloudflare Containers pricing](https://developers.cloudflare.com/containers/pricing/):
-
-| Resource | Provisioned | Monthly Usage | Included Free | Overage | Approx. Cost |
-|----------|-------------|---------------|---------------|---------|--------------|
-| Memory | 4 GiB | 2,920 GiB-hrs | 25 GiB-hrs | 2,895 GiB-hrs | ~$26/mo |
-| CPU (at ~10% utilization) | 1/2 vCPU | ~2,190 vCPU-min | 375 vCPU-min | ~1,815 vCPU-min | ~$2/mo |
-| Disk | 8 GB | 5,840 GB-hrs | 200 GB-hrs | 5,640 GB-hrs | ~$1.50/mo |
-| Workers Paid plan | | | | | $5/mo |
-| **Total** | | | | | **~$34.50/mo** |
-
-Notes:
-- CPU is billed on **active usage only**, not provisioned capacity. The 10% utilization estimate is a rough baseline for a lightly-used personal assistant; your actual cost will vary with usage.
-- Memory and disk are billed on **provisioned capacity** for the full time the container is running.
-- To reduce costs, configure `SANDBOX_SLEEP_AFTER` (e.g., `10m`) so the container sleeps when idle. A container that only runs 4 hours/day would cost roughly ~$5-6/mo in compute on top of the $5 plan fee.
-- Network egress, Workers/Durable Objects requests, and logs are additional but typically minimal for personal use.
-- See the [instance types table](https://developers.cloudflare.com/containers/pricing/) for other options (e.g., `lite` at 256 MiB/$0.50/mo memory or `standard-4` at 12 GiB for heavier workloads).
-
-## What is OpenClaw?
-
-[OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly Clawdbot) is a personal AI assistant with a gateway architecture that connects to multiple chat platforms. Key features:
-
-- **Control UI** - Web-based chat interface at the gateway
-- **Multi-channel support** - Telegram, Discord, Slack
-- **Device pairing** - Secure DM authentication requiring explicit approval
-- **Persistent conversations** - Chat history and context across sessions
-- **Agent runtime** - Extensible AI capabilities with workspace and skills
-
-This project packages OpenClaw to run in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) container, providing a fully managed, always-on deployment without needing to self-host. Optional R2 storage enables persistence across container restarts.
+- **AI emergency agent** — OpenClaw gateway with webchat Control UI, reachable from any browser
+- **Emergency kanban board** — incidents tracked in Cloudflare D1 (`New → Triaged → In Progress → Resolved`), editable by humans **and** by the agent itself
+- **Multi-channel intake** — web (built-in), Telegram (bot token); Discord and Slack supported; WhatsApp planned (phase 2)
+- **Zero Trust security** — Cloudflare Access in front of the worker, JWT validated inside the worker, gateway token, and device pairing
+- **Auto-deploy** — GitHub Actions workflow deploys on every push to `main`
+- **Persistence** — R2 snapshots keep paired devices, config, and conversations across container restarts
 
 ## Architecture
 
-![moltworker architecture](./assets/architecture.png)
+```mermaid
+flowchart LR
+    subgraph Users
+        TG[Telegram users]
+        WEB[Web users]
+        OPS[Operators]
+    end
 
-## Quick Start
+    subgraph CF[Cloudflare]
+        ZT[Zero Trust<br/>Access]
+        W[Worker<br/>proxy + APIs]
+        D1[(D1<br/>kanban)]
+        R2[(R2<br/>snapshots)]
+        subgraph SBX[Sandbox Container]
+            GW[OpenClaw Gateway<br/>:18789]
+        end
+    end
 
-_Cloudflare Sandboxes are available on the [Workers Paid plan](https://dash.cloudflare.com/?to=/:account/workers/plans)._
+    TG --> GW
+    WEB --> ZT --> W
+    OPS --> ZT --> W
+    W --> GW
+    GW -->|creates/moves cards<br/>bearer secret| W
+    W --> D1
+    W --> R2
+```
+
+| Component | Cloudflare primitive | Purpose |
+|-----------|---------------------|---------|
+| Worker | Workers + Hono | Proxy to gateway, admin/kanban APIs, JWT validation |
+| Agent runtime | Sandbox Containers | OpenClaw gateway (`openclaw@2026.7.1-2`, Node 22) |
+| Kanban storage | **D1** | Emergency board cards |
+| Persistence | **R2** | Squashfs snapshots of the container home dir |
+| Edge auth | **Zero Trust Access** | SSO in front of admin UI and Control UI |
+| Browser automation | Browser Rendering | Optional CDP shim for web tasks |
+
+## How Emergencies Flow
+
+### Flow 1 — Report via a channel (agent creates the card)
+
+```mermaid
+sequenceDiagram
+    participant U as User (Telegram/Web)
+    participant G as OpenClaw Gateway
+    participant W as Worker API
+    participant D as D1 (Kanban)
+    participant O as Operator
+
+    U->>G: "Flooding in sector 4, need help"
+    G->>G: emergency-triage skill triggers
+    G->>W: POST /api/internal/kanban/cards<br/>(Bearer KANBAN_AGENT_SECRET)
+    W->>D: INSERT card (status=new, source=telegram)
+    G-->>U: "Logged as incident #…, help is on the way"
+    G->>W: PATCH card → triaged / in_progress / resolved
+    O->>W: /_admin/ → Emergencies tab
+    W->>D: read board
+    O->>D: drag card across columns (manual updates)
+```
+
+### Flow 2 — Manual card (operator creates it)
+
+Operators create cards directly on the board (`/_admin/` → Emergencies → **+ New Card**). The agent can then pick them up, update them, and resolve them as it works incidents through the channels.
+
+## Requirements
+
+- [Workers Paid plan](https://www.cloudflare.com/plans/developer-platform/) ($5/month) — required for Sandbox containers
+- [Anthropic API key](https://console.anthropic.com/) — or Cloudflare AI Gateway with [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/)
+- Free tiers cover the rest: Zero Trust Access, D1, R2, Browser Rendering, AI Gateway
+
+## Deployment Options
+
+| Option | When to use |
+|--------|-------------|
+| **A. Deploy button** | Fastest first deploy (button above), then finish the Setup Guide |
+| **B. Manual** | Full control from your machine — follow the Setup Guide below |
+| **C. CI (GitHub Actions)** | Ongoing auto-deploys on every push to `main` — see [Automatic Deployments](#automatic-deployments-ci) |
+
+## Setup Guide
+
+Complete end-to-end setup from a fresh clone. Steps 1–5 are required; the rest are optional.
+
+### 1. Install, AI provider, and gateway token
 
 ```bash
-# Install dependencies
 npm install
 
-# Set your API key (direct Anthropic access)
+# AI provider — pick ONE:
 npx wrangler secret put ANTHROPIC_API_KEY
-
-# Or use Cloudflare AI Gateway instead (see "Optional: Cloudflare AI Gateway" below)
+# …or Cloudflare AI Gateway (all three required):
 # npx wrangler secret put CLOUDFLARE_AI_GATEWAY_API_KEY
 # npx wrangler secret put CF_AI_GATEWAY_ACCOUNT_ID
 # npx wrangler secret put CF_AI_GATEWAY_GATEWAY_ID
 
-# Generate and set a gateway token (required for remote access)
-# Save this token - you'll need it to access the Control UI
+# Gateway token — protects the Control UI. SAVE this value.
 export MOLTBOT_GATEWAY_TOKEN=$(openssl rand -hex 32)
 echo "Your gateway token: $MOLTBOT_GATEWAY_TOKEN"
 echo "$MOLTBOT_GATEWAY_TOKEN" | npx wrangler secret put MOLTBOT_GATEWAY_TOKEN
-
-# Deploy
-npm run deploy
 ```
 
-After deploying, open the Control UI with your token:
-
-```
-https://your-worker.workers.dev/?token=YOUR_GATEWAY_TOKEN
-```
-
-Replace `your-worker` with your actual worker subdomain and `YOUR_GATEWAY_TOKEN` with the token you generated above.
-
-**Note:** The first request may take 1-2 minutes while the container starts.
-
-> **Important:** You will not be able to use the Control UI until you complete the following steps. You MUST:
-> 1. [Set up Cloudflare Access](#setting-up-the-admin-ui) to protect the admin UI
-> 2. [Pair your device](#device-pairing) via the admin UI at `/_admin/`
-
-You'll also likely want to [enable R2 storage](#persistent-storage-r2) so your paired devices and conversation history persist across container restarts (optional but recommended).
-
-## Setting Up the Admin UI
-
-To use the admin UI at `/_admin/` for device management, you need to:
-1. Enable Cloudflare Access on your worker
-2. Set the Access secrets so the worker can validate JWTs
-
-### 1. Enable Cloudflare Access on workers.dev
-
-The easiest way to protect your worker is using the built-in Cloudflare Access integration for workers.dev:
-
-1. Go to the [Workers & Pages dashboard](https://dash.cloudflare.com/?to=/:account/workers-and-pages)
-2. Select your Worker (e.g., `moltbot-sandbox`)
-3. In **Settings**, under **Domains & Routes**, in the `workers.dev` row, click the meatballs menu (`...`)
-4. Click **Enable Cloudflare Access**
-5. Copy the values shown in the dialog (you'll need the AUD tag later). **Note:** The "Manage Cloudflare Access" link in the dialog may 404 — ignore it.
-6. To configure who can access, go to **Zero Trust** in the Cloudflare dashboard sidebar → **Access** → **Applications**, and find your worker's application:
-   - Add your email address to the allow list
-   - Or configure other identity providers (Google, GitHub, etc.)
-7. Copy the **Application Audience (AUD)** tag from the Access application settings. This will be your `CF_ACCESS_AUD` in Step 2 below
-
-### 2. Set Access Secrets
-
-After enabling Cloudflare Access, set the secrets so the worker can validate JWTs:
+### 2. Kanban database (D1)
 
 ```bash
-# Your Cloudflare Access team domain (e.g., "myteam.cloudflareaccess.com")
-npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
-
-# The Application Audience (AUD) tag from your Access application that you copied in the step above
-npx wrangler secret put CF_ACCESS_AUD
-```
-
-You can find your team domain in the [Zero Trust Dashboard](https://one.dash.cloudflare.com/) under **Settings** > **Custom Pages** (it's the subdomain before `.cloudflareaccess.com`).
-
-### 3. Redeploy
-
-```bash
-npm run deploy
-```
-
-Now visit `/_admin/` and you'll be prompted to authenticate via Cloudflare Access before accessing the admin UI.
-
-### Alternative: Manual Access Application
-
-If you prefer more control, you can manually create an Access application:
-
-1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
-2. Navigate to **Access** > **Applications**
-3. Create a new **Self-hosted** application
-4. Set the application domain to your Worker URL (e.g., `moltbot-sandbox.your-subdomain.workers.dev`)
-5. Add paths to protect: `/_admin/*`, `/api/*`, `/debug/*`
-6. Configure your desired identity providers (e.g., email OTP, Google, GitHub)
-7. Copy the **Application Audience (AUD)** tag and set the secrets as shown above
-
-### Local Development
-
-For local development, create a `.dev.vars` file with:
-
-```bash
-DEV_MODE=true               # Skip Cloudflare Access auth + bypass device pairing
-DEBUG_ROUTES=true           # Enable /debug/* routes (optional)
-```
-
-## Authentication
-
-By default, moltbot uses **device pairing** for authentication. When a new device (browser, CLI, etc.) connects, it must be approved via the admin UI at `/_admin/`.
-
-### Device Pairing
-
-1. A device connects to the gateway
-2. The connection is held pending until approved
-3. An admin approves the device via `/_admin/`
-4. The device is now paired and can connect freely
-
-This is the most secure option as it requires explicit approval for each device.
-
-### Gateway Token (Required)
-
-A gateway token is required to access the Control UI when hosted remotely. Pass it as a query parameter:
-
-```
-https://your-worker.workers.dev/?token=YOUR_TOKEN
-wss://your-worker.workers.dev/ws?token=YOUR_TOKEN
-```
-
-**Note:** Even with a valid token, new devices still require approval via the admin UI at `/_admin/` (see Device Pairing above).
-
-For local development only, set `DEV_MODE=true` in `.dev.vars` to skip Cloudflare Access authentication and enable `allowInsecureAuth` (bypasses device pairing entirely).
-
-## Persistent Storage (R2)
-
-By default, moltbot data (configs, paired devices, conversation history) is lost when the container restarts. To enable persistent storage across sessions, configure R2:
-
-### 1. Create R2 API Token
-
-1. Go to **R2** > **Overview** in the [Cloudflare Dashboard](https://dash.cloudflare.com/)
-2. Click **Manage R2 API Tokens**
-3. Create a new token with **Object Read & Write** permissions
-4. Select the `moltbot-data` bucket (created automatically on first deploy)
-5. Copy the **Access Key ID** and **Secret Access Key**
-
-### 2. Set Secrets
-
-```bash
-# R2 Access Key ID
-npx wrangler secret put R2_ACCESS_KEY_ID
-
-# R2 Secret Access Key
-npx wrangler secret put R2_SECRET_ACCESS_KEY
-
-# Your Cloudflare Account ID
-npx wrangler secret put CF_ACCOUNT_ID
-```
-
-To find your Account ID: Go to the [Cloudflare Dashboard](https://dash.cloudflare.com/), click the three dots menu next to your account name, and select "Copy Account ID".
-
-### How It Works
-
-R2 storage uses a backup/restore approach for simplicity:
-
-**On container startup:**
-- If R2 is mounted and contains backup data, it's restored to the moltbot config directory
-- OpenClaw uses its default paths (no special configuration needed)
-
-**During operation:**
-- A cron job runs every 5 minutes to sync the moltbot config to R2
-- You can also trigger a manual backup from the admin UI at `/_admin/`
-
-**In the admin UI:**
-- When R2 is configured, you'll see "Last backup: [timestamp]"
-- Click "Backup Now" to trigger an immediate sync
-
-Without R2 credentials, moltbot still works but uses ephemeral storage (data lost on container restart).
-
-## Container Lifecycle
-
-By default, the sandbox container stays alive indefinitely (`SANDBOX_SLEEP_AFTER=never`). This is recommended because cold starts take 1-2 minutes.
-
-To reduce costs for infrequently used deployments, you can configure the container to sleep after a period of inactivity:
-
-```bash
-npx wrangler secret put SANDBOX_SLEEP_AFTER
-# Enter: 10m (or 1h, 30m, etc.)
-```
-
-When the container sleeps, the next request will trigger a cold start. If you have R2 storage configured, your paired devices and data will persist across restarts.
-
-## Admin UI
-
-![admin ui](./assets/adminui.png)
-
-Access the admin UI at `/_admin/` to:
-- **R2 Storage Status** - Shows if R2 is configured, last backup time, and a "Backup Now" button
-- **Restart Gateway** - Kill and restart the moltbot gateway process
-- **Device Pairing** - View pending requests, approve devices individually or all at once, view paired devices
-
-The admin UI requires Cloudflare Access authentication (or `DEV_MODE=true` for local development).
-
-## Emergency Board (Kanban)
-
-The admin UI includes an **Emergencies** tab: a kanban board for tracking incidents (`New → Triaged → In Progress → Resolved`) with priorities (`critical/high/medium/low`). Cards can be created:
-
-- **Manually** from the board UI (humans), and
-- **By the agent** — the `emergency-triage` skill instructs OpenClaw to create/move cards when emergencies are reported through any channel (web, Telegram, ...).
-
-Cards are stored in **Cloudflare D1**.
-
-### Setup
-
-```bash
-# 1. Create the D1 database
+# Create the database
 npx wrangler d1 create KANBAN_DB
+# → copy the database_id from the output into wrangler.jsonc (d1_databases section)
 
-# 2. Copy the database_id from the output into wrangler.jsonc (d1_databases section)
-
-# 3. Apply the schema
+# Apply the schema
 npx wrangler d1 migrations apply KANBAN_DB --remote
 
-# 4. Shared secret so the agent can write to the board (skip if you only want manual cards)
+# Shared secret so the AGENT can write to the board
 export KANBAN_AGENT_SECRET=$(openssl rand -hex 32)
+echo "Your kanban secret: $KANBAN_AGENT_SECRET"
 echo "$KANBAN_AGENT_SECRET" | npx wrangler secret put KANBAN_AGENT_SECRET
+```
 
-# 5. Make sure WORKER_URL is set (the agent calls the worker API through it)
-npx wrangler secret put WORKER_URL
-# Enter: https://your-worker.workers.dev
+Without the D1 binding the board shows a "not configured" error but everything else works. Without `KANBAN_AGENT_SECRET` the board is manual-only.
 
-# 6. Redeploy
+### 3. Deploy
+
+```bash
 npm run deploy
 ```
 
-Without the D1 binding the board shows a "not configured" error but the rest of the app keeps working. Without `KANBAN_AGENT_SECRET`, the agent cannot create cards (manual mode only).
+Note your worker URL (`https://moltbot-sandbox.<subdomain>.workers.dev`). The first request takes 1–2 minutes (container cold start).
 
-### Agent API
+### 4. Zero Trust (Cloudflare Access) — REQUIRED
 
-The agent uses `/api/internal/kanban/*` with `Authorization: Bearer <KANBAN_AGENT_SECRET>`:
+This project is designed to sit behind **Cloudflare Zero Trust**. Two things must happen:
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/internal/kanban/cards?status=new` | List cards (optional status filter) |
-| `POST /api/internal/kanban/cards` | Create card (`title` required; `priority`, `source`, `reporter` optional) |
-| `PATCH /api/internal/kanban/cards/:id` | Update/move a card (`status`, `priority`, ...) |
+1. **Edge**: Access challenges visitors before they reach the worker
+2. **Worker**: the worker validates the Access JWT on protected routes (`/_admin/*`, `/api/admin/*`, `/debug/*`)
 
-See `skills/emergency-triage/SKILL.md` for the agent-facing documentation.
+#### 4a. Enable Access on your worker
 
-## Debug Endpoints
+1. Go to [Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages) → select `moltbot-sandbox`
+2. **Settings → Domains & Routes** → on the `workers.dev` row, open the `...` menu → **Enable Cloudflare Access**
+3. Copy the **Team domain** and **Application Audience (AUD) tag** from the dialog
+4. Click **Manage Cloudflare Access** to open the auto-created policy in the [Zero Trust dashboard](https://one.dash.cloudflare.com/) and add the emails of your operators (default login method is one-time PIN; add identity providers under **Zero Trust → Settings → Authentication → Login methods**)
 
-Debug endpoints are available at `/debug/*` when enabled (requires `DEBUG_ROUTES=true` and Cloudflare Access):
+#### 4b. Bypass the machine-only routes
 
-- `GET /debug/processes` - List all container processes
-- `GET /debug/logs?id=<process_id>` - Get logs for a specific process
-- `GET /debug/version` - Get container and moltbot version info
+The Access application protects the **whole hostname**, but some routes are for machines and are secured by the worker itself with shared secrets. Add a **Bypass** policy so Access doesn't challenge them:
 
-## Optional: Chat Channels
+1. In the Zero Trust dashboard, go to **Access → Applications** → select your worker's application
+2. Add a new policy: **Action: Bypass**, name it `machine-routes`
+3. Under **Additional rules**, add these paths (one rule per path, joined with OR):
 
-### Telegram
+   | Path | Secured by |
+   |------|-----------|
+   | `/api/internal/*` | Worker: bearer `KANBAN_AGENT_SECRET` (agent → kanban API) |
+   | `/cdp*` | Worker: `?secret=` query param (browser automation) |
+   | `/api/status` | Public health/status JSON |
+   | `/sandbox-health` | Public container health check |
+
+> **Important:** without this bypass, the agent cannot create kanban cards and CDP automation breaks. If you prefer, instead of Bypass you can use a **Service Auth** policy with a [service token](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/) and send `CF-Access-Client-Id` / `CF-Access-Client-Secret` headers — but Bypass + worker-level secrets is the tested configuration.
+
+#### 4c. Tell the worker how to validate JWTs
+
+```bash
+# From the dialog in step 4a:
+npx wrangler secret put CF_ACCESS_TEAM_DOMAIN   # e.g. myteam.cloudflareaccess.com
+npx wrangler secret put CF_ACCESS_AUD           # Application Audience (AUD) tag
+
+npm run deploy
+```
+
+Now `/_admin/` and the Control UI require SSO, and the worker cryptographically verifies every Access JWT (audience + issuer + expiry) on protected routes.
+
+### 5. Open the Control UI and pair your device
+
+1. Visit `https://your-worker.workers.dev/?token=YOUR_GATEWAY_TOKEN`
+2. You'll be prompted through Access (SSO/OTP), then the Control UI loads
+3. New devices start **pending** — approve them at `/_admin/` (Devices tab → **Approve**)
+
+### 6. R2 persistence (recommended)
+
+Without R2, paired devices and conversations are lost when the container restarts.
+
+```bash
+# The moltbot-data bucket is created on first deploy.
+# Create an R2 API token (R2 → Manage R2 API Tokens → Object Read & Write on moltbot-data),
+# then:
+npx wrangler secret put R2_ACCESS_KEY_ID
+npx wrangler secret put R2_SECRET_ACCESS_KEY
+npx wrangler secret put CF_ACCOUNT_ID
+npm run deploy
+```
+
+Snapshots run automatically; trigger one manually from `/_admin/` → **Backup Now**.
+
+### 7. Telegram channel
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and copy the token
-2. Set the secret and redeploy:
+2. Configure and redeploy:
 
 ```bash
 npx wrangler secret put TELEGRAM_BOT_TOKEN
-
-# Optional: 'pairing' (default, each user must be approved) or 'open'
+# Optional: 'pairing' (default — each user approved via /_admin/) or 'open'
 npx wrangler secret put TELEGRAM_DM_POLICY
-
 npm run deploy
 ```
 
-With the default `pairing` policy, users who DM the bot must be approved from the admin UI (`/_admin/`, Devices tab).
+Users DM the bot → messages reach the agent → emergencies become kanban cards automatically.
 
-### WhatsApp (Phase 2 — not enabled yet)
+### 8. WORKER_URL (needed for agent → kanban calls)
 
-OpenClaw supports WhatsApp via the `@openclaw/whatsapp` plugin (WhatsApp Web / Baileys). It is **not** installed in this image yet. Enabling it requires:
+```bash
+npx wrangler secret put WORKER_URL
+# Enter: https://moltbot-sandbox.<subdomain>.workers.dev
+npm run deploy
+```
 
-1. Installing the plugin in the `Dockerfile` (`openclaw plugins install clawhub:@openclaw/whatsapp`)
-2. Adding `channels.whatsapp` config (`dmPolicy`, `allowFrom`) to the `start-openclaw.sh` patch
-3. Solving QR-code linking in a headless container: run `openclaw channels login --channel whatsapp` via `sandbox.exec` and render the QR in the admin UI
+## Using the System
 
-Tracked as future work — use web + Telegram in the meantime.
+| URL | What |
+|-----|------|
+| `/?token=…` | Control UI — webchat with the agent (Access + token + pairing) |
+| `/_admin/` → **Emergencies** | Kanban board: create, drag, prioritize, delete cards |
+| `/_admin/` → **Devices** | Approve pairing requests, restart gateway, R2 backups |
+| `/api/status` | Public status JSON |
+
+The board auto-refreshes every 15s, so cards created by the agent appear live. Columns: **New** (fresh reports) → **Triaged** (assessed, priority set) → **In Progress** (being handled) → **Resolved**.
+
+## Automatic Deployments (CI)
+
+`.github/workflows/deploy.yml` runs tests, builds, and deploys on every push to `main`.
+
+Enable it in your fork: **Settings → Secrets and variables → Actions** and add:
+
+- `CLOUDFLARE_API_TOKEN` — token with Workers edit permissions
+- `CLOUDFLARE_ACCOUNT_ID` — your account ID
+
+## Optional: Cloudflare AI Gateway
+
+Route model traffic through [AI Gateway](https://developers.cloudflare.com/ai-gateway/) for caching, analytics, and rate limiting. Set the three `CLOUDFLARE_AI_GATEWAY_API_KEY` / `CF_AI_GATEWAY_ACCOUNT_ID` / `CF_AI_GATEWAY_GATEWAY_ID` secrets (step 1) and optionally pick a model:
+
+```bash
+npx wrangler secret put CF_AI_GATEWAY_MODEL
+# e.g. workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast | openai/gpt-4o | anthropic/claude-sonnet-4-5
+```
+
+With [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/), set `CLOUDFLARE_AI_GATEWAY_API_KEY` to your AI Gateway auth token and use Workers AI models with no provider key.
+
+## Optional: Other Channels
 
 ### Discord
 
@@ -353,206 +281,97 @@ npx wrangler secret put SLACK_APP_TOKEN
 npm run deploy
 ```
 
+### WhatsApp (Phase 2 — not enabled yet)
+
+OpenClaw supports WhatsApp via the `@openclaw/whatsapp` plugin (WhatsApp Web / Baileys). It is **not** installed in this image. Enabling it requires:
+
+1. Installing the plugin in the `Dockerfile` (`openclaw plugins install clawhub:@openclaw/whatsapp`)
+2. Adding `channels.whatsapp` config (`dmPolicy`, `allowFrom`) to the `start-openclaw.sh` patch
+3. Solving QR-code linking in a headless container: run `openclaw channels login --channel whatsapp` via `sandbox.exec` and render the QR in the admin UI
+
 ## Optional: Browser Automation (CDP)
 
-This worker includes a Chrome DevTools Protocol (CDP) shim that enables browser automation capabilities. This allows OpenClaw to control a headless browser for tasks like web scraping, screenshots, and automated testing.
-
-### Setup
-
-1. Set a shared secret for authentication:
-
 ```bash
-npx wrangler secret put CDP_SECRET
-# Enter a secure random string
-```
-
-2. Set your worker's public URL:
-
-```bash
-npx wrangler secret put WORKER_URL
-# Enter: https://your-worker.workers.dev
-```
-
-3. Redeploy:
-
-```bash
+npx wrangler secret put CDP_SECRET    # random string
+npx wrangler secret put WORKER_URL    # https://your-worker.workers.dev
 npm run deploy
 ```
 
-### Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /cdp/json/version` | Browser version information |
-| `GET /cdp/json/list` | List available browser targets |
-| `GET /cdp/json/new` | Create a new browser target |
-| `WS /cdp/devtools/browser/{id}` | WebSocket connection for CDP commands |
-
-All endpoints require authentication via the `?secret=<CDP_SECRET>` query parameter.
-
-## Built-in Skills
-
-The container includes pre-installed skills in `/root/clawd/skills/`:
-
-### cloudflare-browser
-
-Browser automation via the CDP shim. Requires `CDP_SECRET` and `WORKER_URL` to be set (see [Browser Automation](#optional-browser-automation-cdp) above).
-
-**Scripts:**
-- `screenshot.js` - Capture a screenshot of a URL
-- `video.js` - Create a video from multiple URLs
-- `cdp-client.js` - Reusable CDP client library
-
-**Usage:**
-```bash
-# Screenshot
-node /root/clawd/skills/cloudflare-browser/scripts/screenshot.js https://example.com output.png
-
-# Video from multiple URLs
-node /root/clawd/skills/cloudflare-browser/scripts/video.js "https://site1.com,https://site2.com" output.mp4 --scroll
-```
-
-See `skills/cloudflare-browser/SKILL.md` for full documentation.
-
-## Optional: Cloudflare AI Gateway
-
-You can route API requests through [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) for caching, rate limiting, analytics, and cost tracking. OpenClaw has native support for Cloudflare AI Gateway as a first-class provider.
-
-AI Gateway acts as a proxy between OpenClaw and your AI provider (e.g., Anthropic). Requests are sent to `https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/anthropic` instead of directly to `api.anthropic.com`, giving you Cloudflare's analytics, caching, and rate limiting. You still need a provider API key (e.g., your Anthropic API key) — the gateway forwards it to the upstream provider.
-
-### Setup
-
-1. Create an AI Gateway in the [AI Gateway section](https://dash.cloudflare.com/?to=/:account/ai/ai-gateway/create-gateway) of the Cloudflare Dashboard.
-2. Set the three required secrets:
-
-```bash
-# Your AI provider's API key (e.g., your Anthropic API key).
-# This is passed through the gateway to the upstream provider.
-npx wrangler secret put CLOUDFLARE_AI_GATEWAY_API_KEY
-
-# Your Cloudflare account ID
-npx wrangler secret put CF_AI_GATEWAY_ACCOUNT_ID
-
-# Your AI Gateway ID (from the gateway overview page)
-npx wrangler secret put CF_AI_GATEWAY_GATEWAY_ID
-```
-
-All three are required. OpenClaw constructs the gateway URL from the account ID and gateway ID, and passes the API key to the upstream provider through the gateway.
-
-3. Redeploy:
-
-```bash
-npm run deploy
-```
-
-When Cloudflare AI Gateway is configured, it takes precedence over direct `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`.
-
-### Choosing a Model
-
-By default, AI Gateway uses Anthropic's Claude Sonnet 4.5. To use a different model or provider, set `CF_AI_GATEWAY_MODEL` with the format `provider/model-id`:
-
-```bash
-npx wrangler secret put CF_AI_GATEWAY_MODEL
-# Enter: workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast
-```
-
-This works with any [AI Gateway provider](https://developers.cloudflare.com/ai-gateway/usage/providers/):
-
-| Provider | Example `CF_AI_GATEWAY_MODEL` value | API key is... |
-|----------|-------------------------------------|---------------|
-| Workers AI | `workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast` | Cloudflare API token |
-| OpenAI | `openai/gpt-4o` | OpenAI API key |
-| Anthropic | `anthropic/claude-sonnet-4-5` | Anthropic API key |
-| Groq | `groq/llama-3.3-70b` | Groq API key |
-
-**Note:** `CLOUDFLARE_AI_GATEWAY_API_KEY` must match the provider you're using — it's your provider's API key, forwarded through the gateway. You can only use one provider at a time through the gateway. For multiple providers, use direct keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) alongside the gateway config.
-
-#### Workers AI with Unified Billing
-
-With [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/), you can use Workers AI models without a separate provider API key — Cloudflare bills you directly. Set `CLOUDFLARE_AI_GATEWAY_API_KEY` to your [AI Gateway authentication token](https://developers.cloudflare.com/ai-gateway/configuration/authentication/) (the `cf-aig-authorization` token).
-
-### Legacy AI Gateway Configuration
-
-The previous `AI_GATEWAY_API_KEY` + `AI_GATEWAY_BASE_URL` approach is still supported for backward compatibility but is deprecated in favor of the native configuration above.
+Endpoints (`?secret=<CDP_SECRET>` required): `GET /cdp/json/version`, `GET /cdp/json/list`, `GET /cdp/json/new`, `WS /cdp/devtools/browser/{id}`. The `cloudflare-browser` skill in the container uses these. Remember `/cdp*` needs the Access bypass from step 4b.
 
 ## All Secrets Reference
 
 | Secret | Required | Description |
 |--------|----------|-------------|
-| `CLOUDFLARE_AI_GATEWAY_API_KEY` | Yes* | Your AI provider's API key, passed through the gateway (e.g., your Anthropic API key). Requires `CF_AI_GATEWAY_ACCOUNT_ID` and `CF_AI_GATEWAY_GATEWAY_ID` |
-| `CF_AI_GATEWAY_ACCOUNT_ID` | Yes* | Your Cloudflare account ID (used to construct the gateway URL) |
-| `CF_AI_GATEWAY_GATEWAY_ID` | Yes* | Your AI Gateway ID (used to construct the gateway URL) |
-| `CF_AI_GATEWAY_MODEL` | No | Override default model: `provider/model-id` (e.g. `workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast`). See [Choosing a Model](#choosing-a-model) |
-| `ANTHROPIC_API_KEY` | Yes* | Direct Anthropic API key (alternative to AI Gateway) |
-| `ANTHROPIC_BASE_URL` | No | Direct Anthropic API base URL |
-| `OPENAI_API_KEY` | No | OpenAI API key (alternative provider) |
-| `AI_GATEWAY_API_KEY` | No | Legacy AI Gateway API key (deprecated, use `CLOUDFLARE_AI_GATEWAY_API_KEY` instead) |
-| `AI_GATEWAY_BASE_URL` | No | Legacy AI Gateway endpoint URL (deprecated) |
-| `CF_ACCESS_TEAM_DOMAIN` | Yes* | Cloudflare Access team domain (required for admin UI) |
-| `CF_ACCESS_AUD` | Yes* | Cloudflare Access application audience (required for admin UI) |
-| `MOLTBOT_GATEWAY_TOKEN` | Yes | Gateway token for authentication (pass via `?token=` query param) |
-| `DEV_MODE` | No | Set to `true` to skip CF Access auth + device pairing (local dev only) |
-| `DEBUG_ROUTES` | No | Set to `true` to enable `/debug/*` routes |
-| `SANDBOX_SLEEP_AFTER` | No | Container sleep timeout: `never` (default) or duration like `10m`, `1h` |
-| `R2_ACCESS_KEY_ID` | No | R2 access key for persistent storage |
-| `R2_SECRET_ACCESS_KEY` | No | R2 secret key for persistent storage |
-| `CF_ACCOUNT_ID` | No | Cloudflare account ID (required for R2 storage) |
-| `TELEGRAM_BOT_TOKEN` | No | Telegram bot token |
-| `TELEGRAM_DM_POLICY` | No | Telegram DM policy: `pairing` (default) or `open` |
-| `DISCORD_BOT_TOKEN` | No | Discord bot token |
-| `DISCORD_DM_POLICY` | No | Discord DM policy: `pairing` (default) or `open` |
-| `SLACK_BOT_TOKEN` | No | Slack bot token |
-| `SLACK_APP_TOKEN` | No | Slack app token |
-| `CDP_SECRET` | No | Shared secret for CDP endpoint authentication (see [Browser Automation](#optional-browser-automation-cdp)) |
-| `WORKER_URL` | No | Public URL of the worker (required for CDP and agent kanban API) |
-| `KANBAN_AGENT_SECRET` | No | Shared secret for `/api/internal/kanban` — lets the agent create/move board cards (see [Emergency Board](#emergency-board-kanban)) |
+| `ANTHROPIC_API_KEY` | Yes* | Direct Anthropic key (*or use AI Gateway instead) |
+| `CLOUDFLARE_AI_GATEWAY_API_KEY` | Yes* | Provider key routed via AI Gateway (+ the two below) |
+| `CF_AI_GATEWAY_ACCOUNT_ID` | Yes* | Cloudflare account ID |
+| `CF_AI_GATEWAY_GATEWAY_ID` | Yes* | AI Gateway ID |
+| `CF_AI_GATEWAY_MODEL` | No | Model override: `provider/model-id` |
+| `OPENAI_API_KEY` | No | Alternative provider |
+| `MOLTBOT_GATEWAY_TOKEN` | **Yes** | Control UI token (`?token=`) |
+| `CF_ACCESS_TEAM_DOMAIN` | **Yes** | Zero Trust team domain (JWT validation) |
+| `CF_ACCESS_AUD` | **Yes** | Access application AUD tag (JWT validation) |
+| `KANBAN_AGENT_SECRET` | Recommended | Bearer secret for `/api/internal/kanban` (agent → board) |
+| `WORKER_URL` | Recommended | Public worker URL (agent API calls + CDP) |
+| `R2_ACCESS_KEY_ID` | Recommended | R2 persistence |
+| `R2_SECRET_ACCESS_KEY` | Recommended | R2 persistence |
+| `CF_ACCOUNT_ID` | Recommended | Account ID for R2 presigned URLs |
+| `TELEGRAM_BOT_TOKEN` | No | Telegram channel |
+| `TELEGRAM_DM_POLICY` | No | `pairing` (default) or `open` |
+| `DISCORD_BOT_TOKEN` / `DISCORD_DM_POLICY` | No | Discord channel |
+| `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` | No | Slack channel |
+| `CDP_SECRET` | No | Browser automation shared secret |
+| `DEV_MODE` | No | `true` skips Access + pairing (local dev only) |
+| `DEBUG_ROUTES` | No | `true` enables `/debug/*` |
+| `SANDBOX_SLEEP_AFTER` | No | `never` (default) or e.g. `10m`, `1h` |
 
-## Automatic Deployments (CI)
+## Container Cost Estimate
 
-`.github/workflows/deploy.yml` deploys to Cloudflare on every push to `main` (after lint/typecheck/tests pass via the Test workflow). To enable it in your fork, add two repository secrets (**Settings → Secrets and variables → Actions**):
+`standard-1` instance (½ vCPU, 4 GiB, 8 GB disk) running 24/7: roughly **~$34.50/mo** (memory ~$26 + CPU ~$2 + disk ~$1.50 + $5 plan). Set `SANDBOX_SLEEP_AFTER=10m` to sleep when idle (≈$5–6/mo compute for ~4h/day usage) at the cost of 1–2 min cold starts. See [Containers pricing](https://developers.cloudflare.com/containers/pricing/).
 
-- `CLOUDFLARE_API_TOKEN` — API token with Workers edit permissions
-- `CLOUDFLARE_ACCOUNT_ID` — your Cloudflare account ID
+## Security Model (Defense in Depth)
 
-## Security Considerations
+1. **Zero Trust Access (edge)** — SSO/OTP challenge for the whole hostname, minus the machine routes you bypassed
+2. **JWT validation (worker)** — every protected route cryptographically verifies the Access JWT (`CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD`)
+3. **Gateway token** — `?token=` required for the Control UI
+4. **Device pairing** — every new device/DM user approved in `/_admin/`
+5. **Shared secrets for machines** — `KANBAN_AGENT_SECRET` (kanban API), `CDP_SECRET` (browser); never exposed to browsers
 
-### Authentication Layers
+## Debug Endpoints
 
-OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
+With `DEBUG_ROUTES=true` (and Access auth):
 
-1. **Cloudflare Access** - Protects admin routes (`/_admin/`, `/api/*`, `/debug/*`). Only authenticated users can manage devices.
-
-2. **Gateway Token** - Required to access the Control UI. Pass via `?token=` query parameter. Keep this secret.
-
-3. **Device Pairing** - Each device (browser, CLI, chat platform DM) must be explicitly approved via the admin UI before it can interact with the assistant. This is the default "pairing" DM policy.
+- `GET /debug/processes` — container processes
+- `GET /debug/logs?id=<process_id>` — process logs
+- `GET /debug/version` — versions
 
 ## Troubleshooting
 
-**`npm run dev` fails with an `Unauthorized` error:** You need to enable Cloudflare Containers in the [Containers dashboard](https://dash.cloudflare.com/?to=/:account/workers/containers)
+| Symptom | Fix |
+|---------|-----|
+| Agent doesn't create kanban cards | Check the Access **Bypass** policy covers `/api/internal/*` (step 4b), `KANBAN_AGENT_SECRET` and `WORKER_URL` are set, and D1 is bound |
+| Board shows "not configured" | Create D1, paste `database_id` in `wrangler.jsonc`, apply migrations, redeploy |
+| 401/redirect loop on `/_admin/` | Verify `CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD` match the Access app |
+| Config changes ignored | Bump `# Build cache bust:` in `Dockerfile` and redeploy |
+| Devices not appearing | CLI calls take 10–15s; wait and refresh |
+| Slow first request | Container cold start (1–2 min) — normal |
+| WebSocket fails locally | `wrangler dev` limitation — test deployed |
+| Windows: exit code 126 | Git CRLF — set `core.autocrlf input` (see [#64](https://github.com/cloudflare/moltworker/issues/64)) |
 
-**Gateway fails to start:** Check `npx wrangler secret list` and `npx wrangler tail`
+Logs: `npx wrangler tail`. Secrets: `npx wrangler secret list`.
 
-**Config changes not working:** Edit the `# Build cache bust:` comment in `Dockerfile` and redeploy
+## Local Development
 
-**Slow first request:** Cold starts take 1-2 minutes. Subsequent requests are faster.
-
-**R2 not mounting:** Check that all three R2 secrets are set (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `CF_ACCOUNT_ID`). Note: R2 mounting only works in production, not with `wrangler dev`.
-
-**Access denied on admin routes:** Ensure `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, and that your Cloudflare Access application is configured correctly.
-
-**Devices not appearing in admin UI:** Device list commands take 10-15 seconds due to WebSocket connection overhead. Wait and refresh.
-
-**WebSocket issues in local development:** `wrangler dev` has known limitations with WebSocket proxying through the sandbox. HTTP requests work but WebSocket connections may fail. Deploy to Cloudflare for full functionality.
-
-## Known Issues
-
-### Windows: Gateway fails to start with exit code 126 (permission denied)
-
-On Windows, Git may check out shell scripts with CRLF line endings instead of LF. This causes `start-openclaw.sh` to fail with exit code 126 inside the Linux container. Ensure your repository uses LF line endings — configure Git with `git config --global core.autocrlf input` or add a `.gitattributes` file with `* text=auto eol=lf`. See [#64](https://github.com/cloudflare/moltworker/issues/64) for details.
+```bash
+cp .dev.vars.example .dev.vars   # add ANTHROPIC_API_KEY, DEV_MODE=true
+npm run start                    # wrangler dev
+npm test                         # unit tests (vitest)
+npm run dev                      # vite dev server (admin UI only)
+```
 
 ## Links
 
-- [OpenClaw](https://github.com/openclaw/openclaw)
-- [OpenClaw Docs](https://docs.openclaw.ai/)
-- [Cloudflare Sandbox Docs](https://developers.cloudflare.com/sandbox/)
-- [Cloudflare Access Docs](https://developers.cloudflare.com/cloudflare-one/policies/access/)
+- [OpenClaw](https://github.com/openclaw/openclaw) · [OpenClaw Docs](https://docs.openclaw.ai/)
+- [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) · [Zero Trust Access](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/) · [D1](https://developers.cloudflare.com/d1/) · [R2](https://developers.cloudflare.com/r2/)
+- Upstream project: [cloudflare/moltworker](https://github.com/cloudflare/moltworker)
