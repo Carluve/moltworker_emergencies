@@ -34,6 +34,32 @@
   width: 100%;
 }
 
+/* Tab navigation */
+.app-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.tab-btn.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .app-header {

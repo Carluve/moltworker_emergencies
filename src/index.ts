@@ -27,7 +27,7 @@ import type { AppEnv, OpenClawEnv } from './types';
 import { GATEWAY_PORT } from './config';
 import { createAccessMiddleware } from './auth';
 import { ensureGateway, findExistingGatewayProcess, killGateway } from './gateway';
-import { publicRoutes, api, adminUi, debug, cdp } from './routes';
+import { publicRoutes, api, adminUi, debug, cdp, internal } from './routes';
 import { redactSensitiveParams } from './utils/logging';
 import { restoreIfNeeded, createSnapshot } from './persistence';
 import { handleScheduled } from './cron/handler';
@@ -176,6 +176,10 @@ app.route('/', publicRoutes);
 
 // Mount CDP routes (uses shared secret auth via query param, not CF Access)
 app.route('/cdp', cdp);
+
+// Mount internal agent API (shared-secret bearer auth via KANBAN_AGENT_SECRET,
+// not CF Access). Must stay above the protected-routes middleware.
+app.route('/api/internal', internal);
 
 // =============================================================================
 // PROTECTED ROUTES: Cloudflare Access authentication required

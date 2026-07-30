@@ -51,6 +51,8 @@ export function buildEnvVars(env: OpenClawEnv): Record<string, string> {
   if (env.CF_AI_GATEWAY_MODEL) envVars.CF_AI_GATEWAY_MODEL = env.CF_AI_GATEWAY_MODEL;
   if (env.CDP_SECRET) envVars.CDP_SECRET = env.CDP_SECRET;
   if (env.WORKER_URL) envVars.WORKER_URL = env.WORKER_URL;
+  // Shared secret so the agent can call /api/internal/kanban from the container
+  if (env.KANBAN_AGENT_SECRET) envVars.KANBAN_AGENT_SECRET = env.KANBAN_AGENT_SECRET;
 
   // Note: R2 credentials are no longer passed to the container.
   // Persistence is handled by the Sandbox SDK's backup/restore API,

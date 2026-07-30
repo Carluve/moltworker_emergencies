@@ -3,6 +3,8 @@ import type { AppEnv } from '../types';
 import { createAccessMiddleware } from '../auth';
 import { ensureGateway, findExistingGatewayProcess, killGateway, waitForProcess } from '../gateway';
 import { createSnapshot, getLastBackupId, signalRestoreNeeded } from '../persistence';
+import { createCard, deleteCard, listCards, updateCard, isValidStatus } from '../kanban/cards';
+import { parseCreateBody, parseUpdateBody } from '../kanban/validate';
 
 // CLI commands can take 10-15 seconds to complete due to WebSocket connection overhead
 const CLI_TIMEOUT_MS = 20000;
@@ -279,6 +281,76 @@ adminApi.post('/gateway/restart', async (c) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return c.json({ error: errorMessage }, 500);
   }
+});
+
+// =============================================================================
+// Kanban admin routes (emergency board, stored in D1)
+// =============================================================================
+
+// Guard: D1 must be bound
+adminApi.use('/kanban/*', async (c, next) => {
+  if (!c.env.KANBAN_DB) {
+    return c.json({ error: 'Kanban database not configured (KANBAN_DB binding missing)' }, 503);
+  }
+  return next();
+});
+
+// GET /api/admin/kanban/cards - List cards (optionally filtered by status)
+adminApi.get('/kanban/cards', async (c) => {
+  const statusParam = c.req.query('status');
+  if (statusParam !== undefined && !isValidStatus(statusParam)) {
+    return c.json({ error: 'status must be one of: new, triaged, in_progress, resolved' }, 400);
+  }
+  const cards = await listCards(c.env.KANBAN_DB!, statusParam);
+  return c.json({ cards });
+});
+
+// POST /api/admin/kanban/cards - Create a card (created_by=human)
+adminApi.post('/kanban/cards', async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const parsed = parseCreateBody(body, 'human');
+  if (!parsed.ok) {
+    return c.json({ error: parsed.error }, 400);
+  }
+
+  const card = await createCard(c.env.KANBAN_DB!, parsed.value);
+  return c.json({ card }, 201);
+});
+
+// PATCH /api/admin/kanban/cards/:id - Update a card (move, edit, reprioritize)
+adminApi.patch('/kanban/cards/:id', async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const parsed = parseUpdateBody(body);
+  if (!parsed.ok) {
+    return c.json({ error: parsed.error }, 400);
+  }
+
+  const card = await updateCard(c.env.KANBAN_DB!, c.req.param('id'), parsed.value);
+  if (!card) {
+    return c.json({ error: 'Card not found' }, 404);
+  }
+  return c.json({ card });
+});
+
+// DELETE /api/admin/kanban/cards/:id - Delete a card
+adminApi.delete('/kanban/cards/:id', async (c) => {
+  const deleted = await deleteCard(c.env.KANBAN_DB!, c.req.param('id'));
+  if (!deleted) {
+    return c.json({ error: 'Card not found' }, 404);
+  }
+  return c.json({ success: true });
 });
 
 // Mount admin API routes under /admin

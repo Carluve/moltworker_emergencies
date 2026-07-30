@@ -45,6 +45,35 @@ export interface OpenClawEnv {
 
   // Cron wake-ahead: wake container before OpenClaw cron jobs fire
   CRON_WAKE_AHEAD_MINUTES?: string; // Minutes before a cron job to wake the container (default: 10)
+
+  // Emergency kanban board
+  KANBAN_DB?: D1Database; // D1 database with kanban cards (see migrations/)
+  KANBAN_AGENT_SECRET?: string; // Shared secret for /api/internal/kanban (agent access; also passed to container)
+}
+
+/**
+ * Kanban card status / priority / origin enums
+ */
+export const KANBAN_STATUSES = ['new', 'triaged', 'in_progress', 'resolved'] as const;
+export type KanbanStatus = (typeof KANBAN_STATUSES)[number];
+
+export const KANBAN_PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
+export type KanbanPriority = (typeof KANBAN_PRIORITIES)[number];
+
+/**
+ * A kanban card as stored in D1
+ */
+export interface KanbanCard {
+  id: string;
+  title: string;
+  description: string;
+  status: KanbanStatus;
+  priority: KanbanPriority;
+  source: string; // e.g. 'manual', 'web', 'telegram', 'whatsapp'
+  reporter: string | null; // who reported it (email, telegram user, phone...)
+  created_by: 'human' | 'agent';
+  created_at: string; // ISO datetime (UTC)
+  updated_at: string;
 }
 
 /**

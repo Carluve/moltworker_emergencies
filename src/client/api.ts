@@ -137,3 +137,64 @@ export async function triggerSync(): Promise<SyncResponse> {
     method: 'POST',
   });
 }
+
+// =============================================================================
+// Kanban (emergency board)
+// =============================================================================
+
+export type KanbanStatus = 'new' | 'triaged' | 'in_progress' | 'resolved';
+export type KanbanPriority = 'critical' | 'high' | 'medium' | 'low';
+
+export interface KanbanCard {
+  id: string;
+  title: string;
+  description: string;
+  status: KanbanStatus;
+  priority: KanbanPriority;
+  source: string;
+  reporter: string | null;
+  created_by: 'human' | 'agent';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KanbanListResponse {
+  cards: KanbanCard[];
+  error?: string;
+}
+
+export interface KanbanCardResponse {
+  card: KanbanCard;
+  error?: string;
+}
+
+export async function listKanbanCards(): Promise<KanbanListResponse> {
+  return apiRequest<KanbanListResponse>('/kanban/cards');
+}
+
+export async function createKanbanCard(input: {
+  title: string;
+  description?: string;
+  priority?: KanbanPriority;
+}): Promise<KanbanCardResponse> {
+  return apiRequest<KanbanCardResponse>('/kanban/cards', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateKanbanCard(
+  id: string,
+  input: Partial<Pick<KanbanCard, 'title' | 'description' | 'priority' | 'status'>>,
+): Promise<KanbanCardResponse> {
+  return apiRequest<KanbanCardResponse>(`/kanban/cards/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteKanbanCard(id: string): Promise<{ success: boolean; error?: string }> {
+  return apiRequest<{ success: boolean; error?: string }>(`/kanban/cards/${id}`, {
+    method: 'DELETE',
+  });
+}
