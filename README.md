@@ -1,5 +1,7 @@
 # OpenClaw Emergencies on Cloudflare Workers
 
+**English** | [Español](./README.es.md)
+
 Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot/Clawdbot) as an **emergency-response AI assistant** in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) container — with an incident kanban board, multi-channel intake (web, Telegram), and Zero Trust security.
 
 ![moltworker architecture](./assets/logo.png)
@@ -242,7 +244,7 @@ npm run deploy
 | `/_admin/` → **Devices** | Approve pairing requests, restart gateway, R2 backups |
 | `/api/status` | Public status JSON |
 
-The board auto-refreshes every 15s, so cards created by the agent appear live. Columns: **New** (fresh reports) → **Triaged** (assessed, priority set) → **In Progress** (being handled) → **Resolved**.
+The board auto-refreshes every 15s, so cards created by the agent appear live. Columns: **New** (fresh reports) → **Triaged** (assessed, priority set) → **In Progress** (being handled) → **Resolved**. The admin UI is bilingual — switch between **English and Spanish** with the ES/EN toggle in the header (auto-detects browser language, persists your choice).
 
 ## Automatic Deployments (CI)
 

@@ -9,31 +9,28 @@ import {
   type KanbanPriority,
   type KanbanStatus,
 } from '../api';
+import { useI18n, type TFunction } from '../i18n';
 import './KanbanPage.css';
 
-const COLUMNS: Array<{ status: KanbanStatus; label: string }> = [
-  { status: 'new', label: 'New' },
-  { status: 'triaged', label: 'Triaged' },
-  { status: 'in_progress', label: 'In Progress' },
-  { status: 'resolved', label: 'Resolved' },
-];
+const COLUMNS: KanbanStatus[] = ['new', 'triaged', 'in_progress', 'resolved'];
 
 const PRIORITIES: KanbanPriority[] = ['critical', 'high', 'medium', 'low'];
 
 const REFRESH_INTERVAL_MS = 15000;
 
-function formatTimeAgo(iso: string) {
+function formatTimeAgo(iso: string, t: TFunction) {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 60) return t('time.secondsAgo', { n: seconds });
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return t('time.minutesAgo', { n: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t('time.hoursAgo', { n: hours });
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return t('time.daysAgo', { n: days });
 }
 
 export default function KanbanPage() {
+  const { t } = useI18n();
   const [cards, setCards] = useState<KanbanCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,22 +42,25 @@ export default function KanbanPage() {
   const [submitting, setSubmitting] = useState(false);
   const draggedCardId = useRef<string | null>(null);
 
-  const fetchCards = useCallback(async (showSpinner = false) => {
-    try {
-      if (showSpinner) setLoading(true);
-      setError(null);
-      const data = await listKanbanCards();
-      setCards(data.cards || []);
-    } catch (err) {
-      if (err instanceof AuthError) {
-        setError('Authentication required. Please log in via Cloudflare Access.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to fetch cards');
+  const fetchCards = useCallback(
+    async (showSpinner = false) => {
+      try {
+        if (showSpinner) setLoading(true);
+        setError(null);
+        const data = await listKanbanCards();
+        setCards(data.cards || []);
+      } catch (err) {
+        if (err instanceof AuthError) {
+          setError(t('common.authRequired'));
+        } else {
+          setError(err instanceof Error ? err.message : t('kb.fetchFailed'));
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [t],
+  );
 
   useEffect(() => {
     fetchCards(true);
@@ -84,7 +84,7 @@ export default function KanbanPage() {
       setShowCreateForm(false);
       await fetchCards();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create card');
+      setError(err instanceof Error ? err.message : t('kb.createFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -98,18 +98,18 @@ export default function KanbanPage() {
     try {
       await updateKanbanCard(cardId, { status });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to move card');
+      setError(err instanceof Error ? err.message : t('kb.moveFailed'));
       await fetchCards();
     }
   };
 
   const handleDelete = async (cardId: string) => {
-    if (!confirm('Delete this card?')) return;
+    if (!confirm(t('kb.deleteConfirm'))) return;
     try {
       await deleteKanbanCard(cardId);
       setCards((prev) => prev.filter((c) => c.id !== cardId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete card');
+      setError(err instanceof Error ? err.message : t('kb.deleteFailed'));
     }
   };
 
@@ -131,7 +131,7 @@ export default function KanbanPage() {
     return (
       <div className="loading">
         <div className="spinner"></div>
-        <p>Loading board...</p>
+        <p>{t('kb.loadingBoard')}</p>
       </div>
     );
   }
@@ -142,19 +142,19 @@ export default function KanbanPage() {
         <div className="error-banner">
           <span>{error}</span>
           <button onClick={() => setError(null)} className="dismiss-btn">
-            Dismiss
+            {t('common.dismiss')}
           </button>
         </div>
       )}
 
       <div className="kanban-toolbar">
-        <h2>Emergency Board</h2>
+        <h2>{t('kb.board')}</h2>
         <div className="header-actions">
           <button className="btn btn-secondary" onClick={() => fetchCards()}>
-            Refresh
+            {t('common.refresh')}
           </button>
           <button className="btn btn-primary" onClick={() => setShowCreateForm((v) => !v)}>
-            {showCreateForm ? 'Cancel' : '+ New Card'}
+            {showCreateForm ? t('kb.cancel') : t('kb.newCard')}
           </button>
         </div>
       </div>
@@ -163,7 +163,7 @@ export default function KanbanPage() {
         <form className="kanban-create-form" onSubmit={handleCreate}>
           <input
             type="text"
-            placeholder="Title (e.g. Flooding in sector 4)"
+            placeholder={t('kb.titlePlaceholder')}
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             maxLength={200}
@@ -171,7 +171,7 @@ export default function KanbanPage() {
             autoFocus
           />
           <textarea
-            placeholder="Description (optional)"
+            placeholder={t('kb.descPlaceholder')}
             value={newDescription}
             onChange={(e) => setNewDescription(e.target.value)}
             rows={2}
@@ -188,14 +188,14 @@ export default function KanbanPage() {
               ))}
             </select>
             <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? 'Creating...' : 'Create'}
+              {submitting ? t('kb.creating') : t('kb.create')}
             </button>
           </div>
         </form>
       )}
 
       <div className="kanban-board">
-        {COLUMNS.map(({ status, label }) => {
+        {COLUMNS.map((status) => {
           const columnCards = cards.filter((c) => c.status === status);
           return (
             <div
@@ -210,12 +210,12 @@ export default function KanbanPage() {
             >
               <div className="kanban-column-header">
                 <span className={`column-dot column-${status}`} />
-                <h3>{label}</h3>
+                <h3>{t(`kb.col.${status}`)}</h3>
                 <span className="column-count">{columnCards.length}</span>
               </div>
               <div className="kanban-column-body">
                 {columnCards.length === 0 ? (
-                  <p className="column-empty">No cards</p>
+                  <p className="column-empty">{t('kb.noCards')}</p>
                 ) : (
                   columnCards.map((card) => (
                     <div
@@ -230,7 +230,7 @@ export default function KanbanPage() {
                         </span>
                         <button
                           className="card-delete"
-                          title="Delete card"
+                          title={t('kb.deleteConfirm')}
                           onClick={() => handleDelete(card.id)}
                         >
                           ×
@@ -242,13 +242,17 @@ export default function KanbanPage() {
                       )}
                       <div className="kanban-card-footer">
                         <span className={`source-badge source-${card.created_by}`}>
-                          {card.created_by === 'agent' ? `agent · ${card.source}` : card.source}
+                          {card.created_by === 'agent'
+                            ? t('kb.agentSource', { source: card.source })
+                            : card.source}
                         </span>
                         <span className="card-time" title={card.created_at}>
-                          {formatTimeAgo(card.created_at)}
+                          {formatTimeAgo(card.created_at, t)}
                         </span>
                       </div>
-                      {card.reporter && <p className="card-reporter">via {card.reporter}</p>}
+                      {card.reporter && (
+                        <p className="card-reporter">{t('kb.via', { reporter: card.reporter })}</p>
+                      )}
                     </div>
                   ))
                 )}
