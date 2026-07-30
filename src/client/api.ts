@@ -143,10 +143,17 @@ export async function triggerSync(): Promise<SyncResponse> {
 // =============================================================================
 
 export type KanbanStatus = 'new' | 'triaged' | 'in_progress' | 'resolved';
-export type KanbanPriority = 'critical' | 'high' | 'medium' | 'low';
+
+export const KANBAN_PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
+export type KanbanPriority = (typeof KANBAN_PRIORITIES)[number];
+
+export const KANBAN_CARD_TYPES = ['need', 'offer'] as const;
+export type KanbanCardType = (typeof KANBAN_CARD_TYPES)[number];
 
 export interface KanbanCard {
   id: string;
+  case_num: number;
+  type: KanbanCardType;
   title: string;
   description: string;
   status: KanbanStatus;
@@ -164,7 +171,8 @@ export interface KanbanListResponse {
 }
 
 export interface KanbanCardResponse {
-  card: KanbanCard;
+  success: boolean;
+  card?: KanbanCard;
   error?: string;
 }
 
@@ -175,8 +183,9 @@ export async function listKanbanCards(): Promise<KanbanListResponse> {
 export async function createKanbanCard(input: {
   title: string;
   description?: string;
+  type?: KanbanCardType;
   priority?: KanbanPriority;
-}): Promise<KanbanCardResponse> {
+}): Promise<{ success: boolean; card?: KanbanCard; error?: string }> {
   return apiRequest<KanbanCardResponse>('/kanban/cards', {
     method: 'POST',
     body: JSON.stringify(input),

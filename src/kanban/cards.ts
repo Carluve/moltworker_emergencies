@@ -1,7 +1,9 @@
 import {
+  KANBAN_CARD_TYPES,
   KANBAN_PRIORITIES,
   KANBAN_STATUSES,
   type KanbanCard,
+  type KanbanCardType,
   type KanbanPriority,
   type KanbanStatus,
 } from '../types';
@@ -14,6 +16,7 @@ import {
 export interface CreateCardInput {
   title: string;
   description?: string;
+  type?: KanbanCardType;
   priority?: KanbanPriority;
   status?: KanbanStatus;
   source?: string;
@@ -37,6 +40,10 @@ export function isValidPriority(value: unknown): value is KanbanPriority {
   return typeof value === 'string' && (KANBAN_PRIORITIES as readonly string[]).includes(value);
 }
 
+export function isValidCardType(value: unknown): value is KanbanCardType {
+  return typeof value === 'string' && (KANBAN_CARD_TYPES as readonly string[]).includes(value);
+}
+
 export async function listCards(db: D1Database, status?: KanbanStatus): Promise<KanbanCard[]> {
   const stmt = status
     ? db.prepare('SELECT * FROM cards WHERE status = ? ORDER BY created_at DESC').bind(status)
@@ -53,11 +60,12 @@ export async function createCard(db: D1Database, input: CreateCardInput): Promis
   const id = crypto.randomUUID();
   await db
     .prepare(
-      `INSERT INTO cards (id, title, description, status, priority, source, reporter, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO cards (id, case_num, type, title, description, status, priority, source, reporter, created_by)
+       VALUES (?, COALESCE((SELECT MAX(case_num) FROM cards), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
+      input.type ?? 'need',
       input.title,
       input.description ?? '',
       input.status ?? 'new',

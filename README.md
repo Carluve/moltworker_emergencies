@@ -31,10 +31,25 @@ The goal: **nobody's emergency gets lost in a chat thread again.**
 
 - **AI emergency agent** — OpenClaw gateway with webchat Control UI, reachable from any browser
 - **Emergency kanban board** — incidents tracked in Cloudflare D1 (`New → Triaged → In Progress → Resolved`), editable by humans **and** by the agent itself
+- **Needs & offers with case numbers** — every report becomes a `need` or `offer` card with a sequential case number (`Caso #7`) the agent gives back to the reporter; the agent proposes need↔offer matches and humans validate them on the board
 - **Multi-channel intake** — web (built-in), Telegram (bot token); Discord and Slack supported; WhatsApp planned (phase 2)
 - **Zero Trust security** — Cloudflare Access in front of the worker, JWT validated inside the worker, gateway token, and device pairing
 - **Auto-deploy** — GitHub Actions workflow deploys on every push to `main`
 - **Persistence** — R2 snapshots keep paired devices, config, and conversations across container restarts
+- **Bilingual admin UI** — Spanish and English, auto-detected
+
+## Roadmap
+
+Aligned with the product proposal (`MoSCoW` priorities):
+
+| Phase | Features | Status |
+|-------|----------|--------|
+| **MVP** | Message intake (web + Telegram), case classification & numbering, kanban board, needs/offers model, agent-proposed matches with human validation | ✅ Built |
+| **MVP+** | Public status web page (auto-generated: alerts, collection points, what's needed), aging alerts for unattended urgent cases (15/30 min escalation), territory config (zones, categories, templates), drill mode (simulated message generator) | 🔜 Next |
+| **Phase 2** | WhatsApp via official **Meta Cloud API** (register the number before the crisis), post-emergency report with lessons learned, coordinator shifts & escalation | Planned |
+| **Phase 3** | Multi-emergency historical dashboard, automatic multilingual intake, export for analysis | Later |
+
+Guiding principle throughout: **the system proposes, humans decide** — every match, assignment and closure passes through a person.
 
 ## Architecture
 
@@ -300,11 +315,15 @@ npm run deploy
 
 ### WhatsApp (Phase 2 — not enabled yet)
 
-OpenClaw supports WhatsApp via the `@openclaw/whatsapp` plugin (WhatsApp Web / Baileys). It is **not** installed in this image. Enabling it requires:
+The target for phase 2 is the **official Meta Cloud API** — it is the reliable path for an institutional deployment (no linked phone session to keep alive). Register the number and get message templates approved **before** a crisis hits.
+
+Alternative for quick testing: OpenClaw's `@openclaw/whatsapp` plugin (WhatsApp Web / Baileys). It is **not** installed in this image; enabling it requires:
 
 1. Installing the plugin in the `Dockerfile` (`openclaw plugins install clawhub:@openclaw/whatsapp`)
 2. Adding `channels.whatsapp` config (`dmPolicy`, `allowFrom`) to the `start-openclaw.sh` patch
 3. Solving QR-code linking in a headless container: run `openclaw channels login --channel whatsapp` via `sandbox.exec` and render the QR in the admin UI
+
+Tracked as future work — use web + Telegram in the meantime.
 
 ## Optional: Browser Automation (CDP)
 

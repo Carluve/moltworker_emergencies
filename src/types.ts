@@ -60,11 +60,16 @@ export type KanbanStatus = (typeof KANBAN_STATUSES)[number];
 export const KANBAN_PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
 export type KanbanPriority = (typeof KANBAN_PRIORITIES)[number];
 
+export const KANBAN_CARD_TYPES = ['need', 'offer'] as const;
+export type KanbanCardType = (typeof KANBAN_CARD_TYPES)[number];
+
 /**
  * A kanban card as stored in D1
  */
 export interface KanbanCard {
   id: string;
+  case_num: number;
+  type: KanbanCardType;
   title: string;
   description: string;
   status: KanbanStatus;

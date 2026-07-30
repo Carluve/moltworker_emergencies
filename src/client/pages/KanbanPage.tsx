@@ -5,7 +5,9 @@ import {
   updateKanbanCard,
   deleteKanbanCard,
   AuthError,
+  KANBAN_CARD_TYPES,
   type KanbanCard,
+  type KanbanCardType,
   type KanbanPriority,
   type KanbanStatus,
 } from '../api';
@@ -38,6 +40,7 @@ export default function KanbanPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newType, setNewType] = useState<KanbanCardType>('need');
   const [newPriority, setNewPriority] = useState<KanbanPriority>('medium');
   const [submitting, setSubmitting] = useState(false);
   const draggedCardId = useRef<string | null>(null);
@@ -76,10 +79,12 @@ export default function KanbanPage() {
       await createKanbanCard({
         title: newTitle.trim(),
         description: newDescription.trim() || undefined,
+        type: newType,
         priority: newPriority,
       });
       setNewTitle('');
       setNewDescription('');
+      setNewType('need');
       setNewPriority('medium');
       setShowCreateForm(false);
       await fetchCards();
@@ -177,6 +182,13 @@ export default function KanbanPage() {
             rows={2}
           />
           <div className="form-row">
+            <select value={newType} onChange={(e) => setNewType(e.target.value as KanbanCardType)}>
+              {KANBAN_CARD_TYPES.map((ct) => (
+                <option key={ct} value={ct}>
+                  {t(`kb.type.${ct}`)}
+                </option>
+              ))}
+            </select>
             <select
               value={newPriority}
               onChange={(e) => setNewPriority(e.target.value as KanbanPriority)}
@@ -225,6 +237,10 @@ export default function KanbanPage() {
                       onDragStart={onDragStart(card.id)}
                     >
                       <div className="kanban-card-header">
+                        <span className="case-num">{t('kb.case', { n: card.case_num })}</span>
+                        <span className={`type-badge type-${card.type}`}>
+                          {t(`kb.type.${card.type}`)}
+                        </span>
                         <span className={`priority-badge priority-${card.priority}`}>
                           {card.priority}
                         </span>

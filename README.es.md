@@ -31,10 +31,25 @@ El objetivo: **que ninguna emergencia se vuelva a perder en un hilo de chat.**
 
 - **Agente de IA para emergencias** — gateway OpenClaw con webchat (Control UI), accesible desde cualquier navegador
 - **Tablero kanban de emergencias** — incidentes en Cloudflare D1 (`Nuevas → Clasificadas → En curso → Resueltas`), editable por humanos **y** por el propio agente
+- **Necesidades y ofertas con número de caso** — cada reporte se convierte en una tarjeta de `necesidad` u `oferta` con un número de caso secuencial (`Caso #7`) que el agente devuelve al reportante; el agente propone emparejamientos necesidad↔oferta y los humanos los validan en el tablero
 - **Entrada multicanal** — web (integrado), Telegram (token de bot); Discord y Slack soportados; WhatsApp planificado (fase 2)
 - **Seguridad Zero Trust** — Cloudflare Access delante del worker, JWT validado dentro del worker, token de gateway y emparejamiento de dispositivos
 - **Despliegue automático** — workflow de GitHub Actions que despliega en cada push a `main`
 - **Persistencia** — snapshots en R2 que conservan dispositivos emparejados, configuración y conversaciones entre reinicios del contenedor
+- **UI de admin bilingüe** — español e inglés, con detección automática
+
+## Roadmap
+
+Alineado con la propuesta de producto (prioridades `MoSCoW`):
+
+| Fase | Funcionalidades | Estado |
+|------|-----------------|--------|
+| **MVP** | Entrada de mensajes (web + Telegram), clasificación y numeración de casos, tablero kanban, modelo necesidades/ofertas, matches propuestos por el agente con validación humana | ✅ Construido |
+| **MVP+** | Web pública de estado (auto-generada: avisos, puntos de recogida, qué se necesita), alertas de urgencias que envejecen (escalado 15/30 min), configuración del territorio (zonas, categorías, plantillas), modo simulacro (generador de mensajes de prueba) | 🔜 Siguiente |
+| **Fase 2** | WhatsApp vía **Meta Cloud API** oficial (tramitar el número antes de la crisis), informe post-emergencia con lecciones aprendidas, turnos de guardia y escalado | Planificado |
+| **Fase 3** | Dashboard histórico multi-emergencia, atención multilingüe automática, exportación para análisis | Más adelante |
+
+Principio rector en todo el sistema: **el sistema propone, las personas deciden** — todo match, asignación y cierre pasa por una persona.
 
 ## Arquitectura
 
@@ -89,7 +104,6 @@ sequenceDiagram
     U->>G: "Inundación en el sector 4, necesitamos ayuda"
     G->>G: se activa el skill emergency-triage
     G->>W: POST /api/internal/kanban/cards<br/>(Bearer KANBAN_AGENT_SECRET)
-    W->>D: INSERT tarjeta (status=new, source=telegram)
     G-->>U: "Registrada como incidencia #…, la ayuda está en camino"
     G->>W: PATCH tarjeta → triaged / in_progress / resolved
     O->>W: /_admin/ → pestaña Emergencias
@@ -261,6 +275,18 @@ npm run deploy
 
 El tablero se actualiza solo cada 15 s, así que las tarjetas creadas por el agente aparecen en vivo. Columnas: **Nuevas** (reportes recientes) → **Clasificadas** (evaluadas, prioridad asignada) → **En curso** (gestionándose) → **Resueltas**. La UI de admin está disponible en **español e inglés** (selector ES/EN en la cabecera).
 
+### API del agente
+
+El agente usa `/api/internal/kanban/*` con `Authorization: Bearer <KANBAN_AGENT_SECRET>` (ruta excluida de Access — ver paso 4b):
+
+| Endpoint | Descripción |
+|----------|-------------|
+| `GET /api/internal/kanban/cards?status=new` | Listar tarjetas (filtro opcional por estado) |
+| `POST /api/internal/kanban/cards` | Crear tarjeta (`title` obligatorio; `type` need/offer, `priority`, `source`, `reporter` opcionales) — la respuesta incluye el `case_num` que hay que dar al reportante |
+| `PATCH /api/internal/kanban/cards/:id` | Actualizar/mover una tarjeta (`status`, `priority`, `description`, ...) |
+
+Ver `skills/emergency-triage/SKILL.md` para la documentación orientada al agente.
+
 ## Despliegues automáticos (CI)
 
 `.github/workflows/deploy.yml` ejecuta tests, compila y despliega en cada push a `main`.
@@ -300,7 +326,9 @@ npm run deploy
 
 ### WhatsApp (Fase 2 — aún no activado)
 
-OpenClaw soporta WhatsApp mediante el plugin `@openclaw/whatsapp` (WhatsApp Web / Baileys). **No** está instalado en esta imagen. Activarlo requiere:
+El objetivo para la fase 2 es la **Meta Cloud API** oficial — el camino fiable para un despliegue institucional (sin sesión de teléfono vinculado que mantener). Conviene registrar el número y aprobar las plantillas de mensajes **antes** de que llegue la crisis.
+
+Alternativa para pruebas rápidas: el plugin `@openclaw/whatsapp` de OpenClaw (WhatsApp Web / Baileys). **No** está instalado en esta imagen; activarlo requiere:
 
 1. Instalar el plugin en el `Dockerfile` (`openclaw plugins install clawhub:@openclaw/whatsapp`)
 2. Añadir la config `channels.whatsapp` (`dmPolicy`, `allowFrom`) al parche de `start-openclaw.sh`

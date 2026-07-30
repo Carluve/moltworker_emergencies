@@ -45,7 +45,7 @@ src/
     ├── api.ts        # API client
     └── pages/
 
-migrations/           # D1 migrations (0001_kanban.sql)
+migrations/           # D1 migrations (0001_kanban.sql, 0002_needs_offers.sql)
 skills/
 └── emergency-triage/ # Agent skill: creates/moves kanban cards from any channel
 ```
@@ -76,10 +76,12 @@ stdout.toLowerCase().includes('approved')
 
 ### Kanban Board
 
-- Cards live in D1 (binding `KANBAN_DB`, optional — routes return 503 without it). Schema in `migrations/0001_kanban.sql`.
+- Cards live in D1 (binding `KANBAN_DB`, optional — routes return 503 without it). Schema in `migrations/` (0001 base, 0002 adds `type` + `case_num`).
 - Admin CRUD: `/api/admin/kanban/*` (CF Access). Agent API: `/api/internal/kanban/*` with `Authorization: Bearer $KANBAN_AGENT_SECRET`, mounted in `src/index.ts` BEFORE the CF Access middleware — keep it there.
 - `KANBAN_AGENT_SECRET` is passed to the container in `buildEnvVars()` so the agent can call the API; the agent also needs `WORKER_URL`.
-- Statuses: `new|triaged|in_progress|resolved`. Priorities: `critical|high|medium|low`.
+- Statuses: `new|triaged|in_progress|resolved`. Priorities: `critical|high|medium|low`. Types: `need|offer`.
+- `case_num` is auto-assigned on INSERT (`MAX(case_num)+1`) — the agent must report it back to the user ("Caso #N").
+- Matching: the agent only PROPOSES need↔offer matches in card descriptions; humans validate on the board (principle: the system proposes, humans decide).
 
 ## Commands
 
@@ -109,7 +111,7 @@ Current test coverage:
 When adding new functionality, add corresponding tests.
 
 Current additional coverage:
-- `kanban/kanban.test.ts` - Validation + internal kanban routes (in-memory D1 fake)
+- `kanban/kanban.test.ts` - Validation + internal kanban routes (in-memory D1 fake, incl. type/case_num)
 
 ## Code Style
 

@@ -35,18 +35,31 @@ function createFakeD1() {
         },
         async run() {
           if (sql.startsWith('INSERT INTO cards')) {
-            const [id, title, description, status, priority, source, reporter, created_by] =
-              params as [string, string, string, string, string, string, string | null, string];
+            const [id, type, title, description, status, priority, source, reporter, created_by] =
+              params as [
+                string,
+                KanbanCard['type'],
+                string,
+                string,
+                KanbanCard['status'],
+                KanbanCard['priority'],
+                string,
+                string | null,
+                KanbanCard['created_by'],
+              ];
             const now = new Date().toISOString();
+            const caseNum = Math.max(0, ...[...rows.values()].map((r) => r.case_num ?? 0)) + 1;
             rows.set(id, {
               id,
+              case_num: caseNum,
+              type,
               title,
               description,
-              status: status as KanbanCard['status'],
-              priority: priority as KanbanCard['priority'],
+              status,
+              priority,
               source,
               reporter,
-              created_by: created_by as KanbanCard['created_by'],
+              created_by,
               created_at: now,
               updated_at: now,
             });
@@ -219,6 +232,51 @@ describe('internal kanban routes', () => {
     expect(card.created_by).toBe('agent');
     expect(card.source).toBe('telegram');
     expect(card.reporter).toBe('@bob');
+  });
+
+  it('creates an offer card when type is offer', async () => {
+    const res = await req(
+      '/api/internal/kanban/cards',
+      authed({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Taller ofrece 2 bombas de achique', type: 'offer' }),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const { card } = (await res.json()) as { card: KanbanCard };
+    expect(card.type).toBe('offer');
+  });
+
+  it('rejects an invalid type with 400', async () => {
+    const res = await req(
+      '/api/internal/kanban/cards',
+      authed({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'x', type: 'random' }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('assigns sequential case numbers', async () => {
+    const create = async () => {
+      const res = await req(
+        '/api/internal/kanban/cards',
+        authed({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: 'caso' }),
+        }),
+      );
+      return res.json() as Promise<{ card: KanbanCard }>;
+    };
+
+    const first = await create();
+    const second = await create();
+    expect(first.card.case_num).toBe(1);
+    expect(second.card.case_num).toBe(2);
   });
 
   it('rejects invalid create bodies', async () => {

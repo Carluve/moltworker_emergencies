@@ -1,4 +1,5 @@
 import {
+  isValidCardType,
   isValidPriority,
   isValidStatus,
   type CreateCardInput,
@@ -30,6 +31,9 @@ export function parseCreateBody(
   if (b.description !== undefined && typeof b.description !== 'string') {
     return { ok: false, error: 'description must be a string' };
   }
+  if (b.type !== undefined && !isValidCardType(b.type)) {
+    return { ok: false, error: 'type must be one of: need, offer' };
+  }
   if (b.priority !== undefined && !isValidPriority(b.priority)) {
     return { ok: false, error: 'priority must be one of: critical, high, medium, low' };
   }
@@ -48,6 +52,7 @@ export function parseCreateBody(
     value: {
       title: b.title.trim(),
       description: b.description as string | undefined,
+      type: b.type as CreateCardInput['type'],
       priority: b.priority as CreateCardInput['priority'],
       status: b.status as CreateCardInput['status'],
       source: (b.source as string | undefined) ?? (createdBy === 'agent' ? 'agent' : 'manual'),

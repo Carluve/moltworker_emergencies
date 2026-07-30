@@ -265,6 +265,33 @@
   margin: 0;
 }
 
+/* Case number + type badges */
+.case-num {
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.type-badge {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.type-need {
+  background: rgba(233, 69, 96, 0.2);
+  color: var(--primary-hover);
+}
+
+.type-offer {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success-color);
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .kanban-board {
