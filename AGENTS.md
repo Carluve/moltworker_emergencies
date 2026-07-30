@@ -6,9 +6,12 @@ Guidelines for AI agents working on this codebase.
 
 This is a Cloudflare Worker that runs [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot/Clawdbot) in a Cloudflare Sandbox container. It provides:
 - Proxying to the OpenClaw gateway (web UI + WebSocket)
-- Admin UI at `/_admin/` for device management
-- API endpoints at `/api/*` for device pairing
+- Admin UI at `/_admin/` for device management and an emergency kanban board
+- API endpoints at `/api/*` for device pairing and kanban management
+- Internal agent API at `/api/internal/kanban/*` (bearer-secret auth, no CF Access)
 - Debug endpoints at `/debug/*` for troubleshooting
+
+**Pinned OpenClaw version:** `2026.7.1-2` (Node `22.23.2`, engine requires `>=22.22.3`). Config patch in `start-openclaw.sh` verified against its strict schema via `openclaw doctor --lint` (0 errors). Key 2026.3→2026.7 breaking changes: gateway auth is fail-closed (token required), device-auth is v2-only, config rejects unknown entries.
 
 **Note:** The CLI tool and npm package are now named `openclaw`. Config files use `.openclaw/openclaw.json`. Legacy `.clawdbot` paths are supported for backward compatibility during transition.
 
@@ -30,13 +33,21 @@ src/
 │   ├── sync.ts       # R2 backup sync logic
 │   └── utils.ts      # Shared utilities (waitForProcess)
 ├── routes/           # API route handlers
-│   ├── api.ts        # /api/* endpoints (devices, gateway)
+│   ├── api.ts        # /api/* endpoints (devices, gateway, kanban admin CRUD)
+│   ├── internal.ts   # /api/internal/* endpoints (agent access, bearer secret)
 │   ├── admin.ts      # /_admin/* static file serving
 │   └── debug.ts      # /debug/* endpoints
+├── kanban/           # Emergency kanban board (D1)
+│   ├── cards.ts      # D1 data layer
+│   └── validate.ts   # Shared request-body validation
 └── client/           # React admin UI (Vite)
-    ├── App.tsx
+    ├── App.tsx       # Tab navigation (Emergencies | Devices)
     ├── api.ts        # API client
     └── pages/
+
+migrations/           # D1 migrations (0001_kanban.sql)
+skills/
+└── emergency-triage/ # Agent skill: creates/moves kanban cards from any channel
 ```
 
 ## Key Patterns
@@ -62,6 +73,13 @@ The CLI outputs "Approved" (capital A). Use case-insensitive checks:
 ```typescript
 stdout.toLowerCase().includes('approved')
 ```
+
+### Kanban Board
+
+- Cards live in D1 (binding `KANBAN_DB`, optional — routes return 503 without it). Schema in `migrations/0001_kanban.sql`.
+- Admin CRUD: `/api/admin/kanban/*` (CF Access). Agent API: `/api/internal/kanban/*` with `Authorization: Bearer $KANBAN_AGENT_SECRET`, mounted in `src/index.ts` BEFORE the CF Access middleware — keep it there.
+- `KANBAN_AGENT_SECRET` is passed to the container in `buildEnvVars()` so the agent can call the API; the agent also needs `WORKER_URL`.
+- Statuses: `new|triaged|in_progress|resolved`. Priorities: `critical|high|medium|low`.
 
 ## Commands
 
@@ -89,6 +107,9 @@ Current test coverage:
 - `gateway/sync.test.ts` - R2 backup sync logic
 
 When adding new functionality, add corresponding tests.
+
+Current additional coverage:
+- `kanban/kanban.test.ts` - Validation + internal kanban routes (in-memory D1 fake)
 
 ## Code Style
 
@@ -168,7 +189,7 @@ Local development with `wrangler dev` has issues proxying WebSocket connections 
 The Dockerfile includes a cache bust comment. When changing `start-openclaw.sh`, bump the version:
 
 ```dockerfile
-# Build cache bust: 2026-02-06-v28-openclaw-upgrade
+# Build cache bust: 2026-07-30-v33-openclaw-2026.7.1
 ```
 
 ## Gateway Configuration
@@ -206,6 +227,7 @@ These are the env vars passed TO the container (internal names):
 | `DISCORD_BOT_TOKEN` | `channels.discord.token` | |
 | `SLACK_BOT_TOKEN` | `channels.slack.botToken` | |
 | `SLACK_APP_TOKEN` | `channels.slack.appToken` | |
+| `KANBAN_AGENT_SECRET` | (worker API) | Bearer secret for `/api/internal/kanban` |
 
 ## OpenClaw Config Schema
 
@@ -245,6 +267,10 @@ npx wrangler secret list
 ```
 
 Enable debug routes with `DEBUG_ROUTES=true` and check `/debug/processes`.
+
+## WhatsApp Channel (Phase 2 — not enabled)
+
+Roadmap: install `@openclaw/whatsapp` plugin in the Dockerfile (`openclaw plugins install clawhub:@openclaw/whatsapp`), patch `channels.whatsapp` config in `start-openclaw.sh`, and expose the QR from `openclaw channels login --channel whatsapp` in the admin UI (sandbox.exec + QR render). Headless QR delivery is the hard part — QR codes expire quickly.
 
 ## R2 Storage Notes
 

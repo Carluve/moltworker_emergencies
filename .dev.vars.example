@@ -40,3 +40,7 @@ MOLTBOT_GATEWAY_TOKEN=dev-token-change-in-prod
 # CDP (Chrome DevTools Protocol) configuration for browser automation
 # CDP_SECRET=shared-secret-for-cdp-auth
 # WORKER_URL=https://your-worker.example.com
+
+# Emergency kanban board: shared secret for /api/internal/kanban (agent access).
+# The KANBAN_DB D1 binding is configured in wrangler.jsonc (see migrations/).
+# KANBAN_AGENT_SECRET=shared-secret-for-agent-kanban

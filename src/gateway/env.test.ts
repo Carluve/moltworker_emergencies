@@ -121,6 +121,12 @@ describe('buildEnvVars', () => {
     expect(result.SLACK_APP_TOKEN).toBe('slack-app');
   });
 
+  it('passes KANBAN_AGENT_SECRET to container for agent kanban API access', () => {
+    const env = createMockEnv({ KANBAN_AGENT_SECRET: 'kanban-secret' });
+    const result = buildEnvVars(env);
+    expect(result.KANBAN_AGENT_SECRET).toBe('kanban-secret');
+  });
+
   it('maps DEV_MODE to OPENCLAW_DEV_MODE for container', () => {
     const env = createMockEnv({
       DEV_MODE: 'true',

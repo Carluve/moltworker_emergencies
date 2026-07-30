@@ -6,7 +6,9 @@ Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly
 
 > **Experimental:** This is a proof of concept demonstrating that OpenClaw can run in Cloudflare Sandbox. It is not officially supported and may break without notice. Use at your own risk.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/moltworker)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Carluve/moltworker_emergencies)
+
+> **After a Deploy-button deploy:** create the kanban D1 database and fill in `database_id` in `wrangler.jsonc` (see [Emergency Board](#emergency-board-kanban)), then redeploy.
 
 ## Requirements
 
@@ -254,6 +256,52 @@ Access the admin UI at `/_admin/` to:
 
 The admin UI requires Cloudflare Access authentication (or `DEV_MODE=true` for local development).
 
+## Emergency Board (Kanban)
+
+The admin UI includes an **Emergencies** tab: a kanban board for tracking incidents (`New → Triaged → In Progress → Resolved`) with priorities (`critical/high/medium/low`). Cards can be created:
+
+- **Manually** from the board UI (humans), and
+- **By the agent** — the `emergency-triage` skill instructs OpenClaw to create/move cards when emergencies are reported through any channel (web, Telegram, ...).
+
+Cards are stored in **Cloudflare D1**.
+
+### Setup
+
+```bash
+# 1. Create the D1 database
+npx wrangler d1 create KANBAN_DB
+
+# 2. Copy the database_id from the output into wrangler.jsonc (d1_databases section)
+
+# 3. Apply the schema
+npx wrangler d1 migrations apply KANBAN_DB --remote
+
+# 4. Shared secret so the agent can write to the board (skip if you only want manual cards)
+export KANBAN_AGENT_SECRET=$(openssl rand -hex 32)
+echo "$KANBAN_AGENT_SECRET" | npx wrangler secret put KANBAN_AGENT_SECRET
+
+# 5. Make sure WORKER_URL is set (the agent calls the worker API through it)
+npx wrangler secret put WORKER_URL
+# Enter: https://your-worker.workers.dev
+
+# 6. Redeploy
+npm run deploy
+```
+
+Without the D1 binding the board shows a "not configured" error but the rest of the app keeps working. Without `KANBAN_AGENT_SECRET`, the agent cannot create cards (manual mode only).
+
+### Agent API
+
+The agent uses `/api/internal/kanban/*` with `Authorization: Bearer <KANBAN_AGENT_SECRET>`:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/internal/kanban/cards?status=new` | List cards (optional status filter) |
+| `POST /api/internal/kanban/cards` | Create card (`title` required; `priority`, `source`, `reporter` optional) |
+| `PATCH /api/internal/kanban/cards/:id` | Update/move a card (`status`, `priority`, ...) |
+
+See `skills/emergency-triage/SKILL.md` for the agent-facing documentation.
+
 ## Debug Endpoints
 
 Debug endpoints are available at `/debug/*` when enabled (requires `DEBUG_ROUTES=true` and Cloudflare Access):
@@ -266,10 +314,29 @@ Debug endpoints are available at `/debug/*` when enabled (requires `DEBUG_ROUTES
 
 ### Telegram
 
+1. Create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`) and copy the token
+2. Set the secret and redeploy:
+
 ```bash
 npx wrangler secret put TELEGRAM_BOT_TOKEN
+
+# Optional: 'pairing' (default, each user must be approved) or 'open'
+npx wrangler secret put TELEGRAM_DM_POLICY
+
 npm run deploy
 ```
+
+With the default `pairing` policy, users who DM the bot must be approved from the admin UI (`/_admin/`, Devices tab).
+
+### WhatsApp (Phase 2 — not enabled yet)
+
+OpenClaw supports WhatsApp via the `@openclaw/whatsapp` plugin (WhatsApp Web / Baileys). It is **not** installed in this image yet. Enabling it requires:
+
+1. Installing the plugin in the `Dockerfile` (`openclaw plugins install clawhub:@openclaw/whatsapp`)
+2. Adding `channels.whatsapp` config (`dmPolicy`, `allowFrom`) to the `start-openclaw.sh` patch
+3. Solving QR-code linking in a headless container: run `openclaw channels login --channel whatsapp` via `sandbox.exec` and render the QR in the admin UI
+
+Tracked as future work — use web + Telegram in the meantime.
 
 ### Discord
 
@@ -437,7 +504,15 @@ The previous `AI_GATEWAY_API_KEY` + `AI_GATEWAY_BASE_URL` approach is still supp
 | `SLACK_BOT_TOKEN` | No | Slack bot token |
 | `SLACK_APP_TOKEN` | No | Slack app token |
 | `CDP_SECRET` | No | Shared secret for CDP endpoint authentication (see [Browser Automation](#optional-browser-automation-cdp)) |
-| `WORKER_URL` | No | Public URL of the worker (required for CDP) |
+| `WORKER_URL` | No | Public URL of the worker (required for CDP and agent kanban API) |
+| `KANBAN_AGENT_SECRET` | No | Shared secret for `/api/internal/kanban` — lets the agent create/move board cards (see [Emergency Board](#emergency-board-kanban)) |
+
+## Automatic Deployments (CI)
+
+`.github/workflows/deploy.yml` deploys to Cloudflare on every push to `main` (after lint/typecheck/tests pass via the Test workflow). To enable it in your fork, add two repository secrets (**Settings → Secrets and variables → Actions**):
+
+- `CLOUDFLARE_API_TOKEN` — API token with Workers edit permissions
+- `CLOUDFLARE_ACCOUNT_ID` — your Cloudflare account ID
 
 ## Security Considerations
 

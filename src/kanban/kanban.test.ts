@@ -9,8 +9,7 @@ import { createMockEnv } from '../test-utils';
  * In-memory fake implementing the D1 subset used by src/kanban/cards.ts.
  * Pattern-matches the exact SQL statements issued by the data layer.
  */
-const byCreatedDesc = (a: KanbanCard, b: KanbanCard) =>
-  b.created_at.localeCompare(a.created_at);
+const byCreatedDesc = (a: KanbanCard, b: KanbanCard) => b.created_at.localeCompare(a.created_at);
 
 function createFakeD1() {
   const rows = new Map<string, KanbanCard>();
@@ -205,7 +204,12 @@ describe('internal kanban routes', () => {
       authed({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'Bridge collapsed', priority: 'critical', source: 'telegram', reporter: '@bob' }),
+        body: JSON.stringify({
+          title: 'Bridge collapsed',
+          priority: 'critical',
+          source: 'telegram',
+          reporter: '@bob',
+        }),
       }),
     );
     expect(res.status).toBe(201);

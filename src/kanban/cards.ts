@@ -39,9 +39,7 @@ export function isValidPriority(value: unknown): value is KanbanPriority {
 
 export async function listCards(db: D1Database, status?: KanbanStatus): Promise<KanbanCard[]> {
   const stmt = status
-    ? db
-        .prepare('SELECT * FROM cards WHERE status = ? ORDER BY created_at DESC')
-        .bind(status)
+    ? db.prepare('SELECT * FROM cards WHERE status = ? ORDER BY created_at DESC').bind(status)
     : db.prepare('SELECT * FROM cards ORDER BY created_at DESC');
   const { results } = await stmt.all<KanbanCard>();
   return results ?? [];

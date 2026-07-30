@@ -1,4 +1,9 @@
-import { isValidPriority, isValidStatus, type CreateCardInput, type UpdateCardInput } from './cards';
+import {
+  isValidPriority,
+  isValidStatus,
+  type CreateCardInput,
+  type UpdateCardInput,
+} from './cards';
 
 /**
  * Request-body validation shared by the admin and internal kanban routers.
@@ -7,7 +12,10 @@ import { isValidPriority, isValidStatus, type CreateCardInput, type UpdateCardIn
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export function parseCreateBody(body: unknown, createdBy: 'human' | 'agent'): ParseResult<CreateCardInput> {
+export function parseCreateBody(
+  body: unknown,
+  createdBy: 'human' | 'agent',
+): ParseResult<CreateCardInput> {
   if (typeof body !== 'object' || body === null) {
     return { ok: false, error: 'Request body must be a JSON object' };
   }
