@@ -1,27 +1,50 @@
-# OpenClaw Emergencies en Cloudflare Workers
+<p align="center">
+  <img src="./assets/sos-coordina.png" alt="Logo de SOS Coordina" width="420" />
+</p>
+
+# SOS Coordina — Coordinación de emergencias con OpenClaw en Cloudflare
 
 [English](./README.md) | **Español**
 
-Ejecuta [OpenClaw](https://github.com/openclaw/openclaw) (antes Moltbot/Clawdbot) como **asistente de IA para emergencias** en un contenedor de [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) — con tablero kanban de incidentes, entrada multicanal (web, Telegram) y seguridad Zero Trust.
+**Cuando llega la emergencia, que la ayuda se organice sola.**
 
-<p align="center">
-  <img src="./assets/logo.png" alt="Logo de OpenClaw Emergencies" width="256" />
-</p>
+SOS Coordina es un **coordinador digital de emergencias**: escucha los mensajes de la gente por WhatsApp, Telegram y la web, entiende qué necesita o qué ofrece cada persona, cruza unos con otros y mantiene a todo el mundo informado — construido con [OpenClaw](https://github.com/openclaw/openclaw), tecnología abierta, funcionando íntegramente en la cuenta de Cloudflare de la propia organización.
 
-## La misión
+Para **ayuntamientos**, **ONGs y protección civil** y **redes de voluntarios**.
 
-Cuando estalla una emergencia — una inundación, un incendio, un apagón — la gente pide ayuda por el canal que tiene a mano, y los equipos de respuesta se ahogan en chats dispersos. **Queremos convertir cada mensaje en un incidente registrado y gestionado.**
+![Personas reportando desde sus móviles mientras un núcleo de IA convierte mensajes en un tablero ordenado](./assets/hero-messages.jpg)
 
-Este proyecto construye exactamente eso:
+## El problema: en una emergencia la ayuda sobra — lo que falta es orden
 
-1. **La gente reporta emergencias** desde un chat web o Telegram (WhatsApp después) — sin instalar apps, sin crear cuentas.
-2. **Un agente de IA escucha 24/7**, confirma la recepción al reportante, hace las preguntas adecuadas y registra cada emergencia como una tarjeta en un tablero kanban compartido, con severidad, canal de origen y contexto del reportante.
-3. **Los operadores humanos coordinan** sobre ese tablero en tiempo real: clasifican, priorizan, cambian estados arrastrando tarjetas y ven el trabajo del agente aparecer en vivo.
-4. **Todo corre en el edge de Cloudflare** — Workers, Sandbox Containers, D1, R2, Zero Trust — para que un equipo pequeño despliegue un punto de coordinación resiliente y seguro en minutos, por unos pocos dólares al mes.
+1. **Los mensajes se pierden.** Grupos de WhatsApp improvisados con cientos de mensajes: la información crítica queda enterrada en minutos.
+2. **Quien necesita y quien ofrece no se encuentran.** Las webs de difusión acumulan «necesito» y «ofrezco», pero nadie los cruza ni cierra casos.
+3. **Todo se repite y caduca.** La misma petición se reenvía decenas de veces y nadie sabe qué sigue vigente ni quién va en camino.
+4. **Quien coordina, coordina a ciegas.** Sin una visión de conjunto es imposible responder a la única pregunta que importa: *¿qué falta ahora mismo?*
 
-El objetivo: **que ninguna emergencia se vuelva a perder en un hilo de chat.**
+![Voluntarios desbordados por una tormenta de burbujas de chat y notificaciones](./assets/problem-chaos.jpg)
 
-> **Experimental:** Esto es una prueba de concepto que demuestra que OpenClaw puede ejecutarse en Cloudflare Sandbox. No tiene soporte oficial y puede romperse sin previo aviso. Úsalo bajo tu responsabilidad.
+## La idea
+
+**¿Y si alguien leyera todos los mensajes y los convirtiera en coordinación?**
+
+- **La gente escribe** — «necesito una furgoneta», «ofrezco un almacén» — por WhatsApp, Telegram o la web, sin instalar nada nuevo.
+- **OpenClaw ordena** — entiende cada mensaje, une duplicados, valora la urgencia y cruza necesidades con ofertas.
+- **Todos ven lo mismo** — un tablero con cada caso y su estado: qué falta, quién lo lleva, qué está resuelto.
+
+Cada caso recibe su número al instante («Caso #7»), cada emparejamiento lo **propone el sistema y lo valida una persona**, y cada caso cerrado queda archivado con sus tiempos — así la siguiente emergencia empieza con un informe de lecciones aprendidas, no desde cero.
+
+![Coordinadores frente al tablero de casos y el mapa de situación](./assets/board-vision.jpg)
+
+## Por qué ahora
+
+- **El coordinador ya existe** — OpenClaw es código abierto maduro (MIT), multicanal, multi-LLM y auditado por la comunidad. No lo inventamos: le enseñamos nuestras reglas de emergencia.
+- **El alojamiento está resuelto** — Cloudflare publicó el despliegue de referencia ([Moltworker](https://github.com/cloudflare/moltworker)) que este repo extiende. Escala a cero en reposo y aguanta picos cuando importa.
+- **Cuesta calderilla** — ~5 $/mes apagado; unos **50–150 $ por episodio completo de emergencia** (frente a miles de €/año del software comercial de gestión de crisis).
+- **Se prueba sin riesgo** — un simulacro con 50 voluntarios y 300 mensajes de prueba, con metas publicadas de antemano (primera respuesta < 1 min, acierto de clasificación ≥ 90 %, matches aceptados por el coordinador ≥ 70 %). Si no se cumplen, no hay piloto — y la decisión la toman personas, con datos.
+
+> **Soberanía de los datos:** todo corre en la cuenta de Cloudflare de la organización. Código abierto y auditable, sin dependencia de proveedor — el sistema completo es portable a un VPS con Docker como plan B.
+
+> **Estado:** MVP funcional construido sobre el PoC Moltworker de Cloudflare (upstream experimental — fijamos versiones y mantenemos un plan B en Docker/VPS). Ver el [Roadmap](#roadmap) para lo siguiente: web pública de estado, alertas de envejecimiento, modo simulacro y WhatsApp vía Meta Cloud API.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Carluve/moltworker_emergencies)
 
