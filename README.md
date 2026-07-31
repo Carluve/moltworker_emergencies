@@ -150,10 +150,13 @@ Operators create cards directly on the board (`/_admin/` → Emergencies → **+
 | Option | When to use |
 |--------|-------------|
 | **A. Deploy button** | Fastest first deploy (button above), then finish the Setup Guide |
-| **B. Manual** | Full control from your machine — follow the Setup Guide below |
-| **C. CI (GitHub Actions)** | Ongoing auto-deploys on every push to `main` — see [Automatic Deployments](#automatic-deployments-ci) |
+| **B. Assisted** ⭐ | `npm run setup` — interactive assistant that automates almost everything from your machine |
+| **C. Manual** | Full control — follow the Setup Guide below |
+| **D. CI (GitHub Actions)** | Ongoing auto-deploys on every push to `main` — see [Automatic Deployments](#automatic-deployments-ci) |
 
 ## Setup Guide
+
+> **Fast path (recommended):** `npm install && npm run setup` launches an interactive assistant that automates steps 1–3 and 5–8 — login check, D1 create + `database_id` wiring + migrations, R2 bucket, AI provider secrets, generated tokens, Telegram, deploy + `WORKER_URL` — and prints the remaining manual Access steps with direct dashboard links. The guide below stays as the manual reference and for troubleshooting.
 
 Complete end-to-end setup from a fresh clone. Steps 1–5 are required; the rest are optional.
 

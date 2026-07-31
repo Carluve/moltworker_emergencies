@@ -46,6 +46,8 @@ src/
     └── pages/
 
 migrations/           # D1 migrations (0001_kanban.sql, 0002_needs_offers.sql)
+scripts/
+└── setup.mjs         # Interactive deployment assistant (npm run setup)
 skills/
 └── emergency-triage/ # Agent skill: creates/moves kanban cards from any channel
 ```
@@ -86,6 +88,7 @@ stdout.toLowerCase().includes('approved')
 ## Commands
 
 ```bash
+npm run setup         # Interactive deployment assistant (idempotent, ES/EN by LANG)
 npm test              # Run tests (vitest)
 npm run test:watch    # Run tests in watch mode
 npm run build         # Build worker + client

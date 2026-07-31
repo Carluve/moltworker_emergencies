@@ -149,10 +149,13 @@ Los operadores crean tarjetas directamente en el tablero (`/_admin/` → Emergen
 | Opción | Cuándo usarla |
 |--------|---------------|
 | **A. Botón Deploy** | Primer despliegue rápido (botón de arriba), luego termina la Guía de instalación |
-| **B. Manual** | Control total desde tu máquina — sigue la Guía de instalación |
-| **C. CI (GitHub Actions)** | Despliegues automáticos en cada push a `main` — ver [Despliegues automáticos](#despliegues-automáticos-ci) |
+| **B. Asistido** ⭐ | `npm run setup` — asistente interactivo que automatiza casi todo desde tu máquina |
+| **C. Manual** | Control total — sigue la Guía de instalación |
+| **D. CI (GitHub Actions)** | Despliegues automáticos en cada push a `main` — ver [Despliegues automáticos](#despliegues-automáticos-ci) |
 
 ## Guía de instalación
+
+> **Vía rápida (recomendada):** `npm install && npm run setup` lanza un asistente interactivo que automatiza los pasos 1–3 y 5–8 — comprobación de login, creación de D1 + `database_id` + migraciones, bucket R2, secretos del proveedor de IA, tokens generados, Telegram, despliegue + `WORKER_URL` — y al final imprime los pasos manuales de Access con enlaces directos al dashboard. La guía de abajo queda como referencia manual y para diagnóstico.
 
 Instalación completa desde cero. Los pasos 1–5 son obligatorios; el resto opcionales.
 
